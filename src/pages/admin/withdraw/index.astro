@@ -1,6 +1,7 @@
 ---
 // src/pages/withdraw.astro
 import Layout from '@layouts/default.astro';
+import Sidebar from '@components/sidebar.astro';
 import { asRows, sql } from '@lib/db';
 
 // Obtener cuentas disponibles
@@ -34,8 +35,9 @@ const today = new Date().toISOString().split('T')[0];
 ---
 
 <Layout title="Retirar Fondos">
-  <div class="min-h-screen bg-gray-50 py-8 px-4 sm:px-6 lg:px-8">
-    <div class="max-w-2xl mx-auto">
+  <Sidebar activePage="withdraw" />
+    <main class="flex-1 ml-64 p-8 overflow-y-auto">
+      <div class="max-w-2xl mx-auto space-y-6">
       <!-- Header -->
       <div class="mb-8">
         <h1 class="text-3xl font-bold text-gray-900">Retirar Fondos</h1>
@@ -59,7 +61,6 @@ const today = new Date().toISOString().split('T')[0];
           </div>
         </div>
       )}
-
       {withdrawSuccess === '0' && (
         <div class="mb-6 bg-red-50 border border-red-200 rounded-lg p-4">
           <div class="flex">
@@ -199,15 +200,14 @@ const today = new Date().toISOString().split('T')[0];
           <li>• Los retiros quedan registrados en el historial</li>
         </ul>
       </div>
-    </div>
-  </div>
+      </div>
+    </main>
 </Layout>
-
-<script>
+<script is:inline>
   // Validación adicional en el cliente
   const form = document.querySelector('form');
-  const amountInput = document.getElementById('amount') as HTMLInputElement;
-  const accountSelect = document.getElementById('account_id') as HTMLSelectElement;
+  const amountInput = document.getElementById('amount');
+  const accountSelect = document.getElementById('account_id');
 
   form?.addEventListener('submit', (e) => {
     const amount = parseFloat(amountInput.value);

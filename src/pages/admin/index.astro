@@ -14,9 +14,61 @@ const funds_success = searchParams.get("contribution_success");
 const withdrawSuccess = searchParams.get("withdraw_success");
 const error = searchParams.get("error");
 
-// ----------------------
-// 1. OBTENER CUENTAS
-// ----------------------
+
+const rates = await sql`
+SELECT usd_to_cop
+FROM exchange_rates
+ORDER BY date DESC
+LIMIT 1;
+`;
+const usdToCop = Number(rates[0]?.usd_to_cop ?? 0);
+const thisMonth = new Date().toISOString().slice(0, 7);
+const contributionsThisMonth = await sql`
+SELECT COALESCE(
+SUM(
+CASE 
+WHEN currency = 'USD' THEN amount * ${usdToCop} -- <-- Usar usdToCop aquí está bien para reportar el flujo de caja actual
+ELSE amount
+END
+), 0) as total
+FROM contributions
+WHERE date >= ${thisMonth + '-01'};
+`;
+const withdrawalsThisMonth = await sql`
+SELECT COALESCE(
+SUM(
+CASE 
+WHEN currency = 'USD' THEN amount * ${usdToCop} -- <-- Usar usdToCop aquí está bien para reportar el flujo de caja actual
+ELSE amount
+END
+), 0) as total
+FROM withdrawals
+WHERE date >= ${thisMonth + '-01'};
+`;
+const totalContributions = await sql`
+SELECT COALESCE(SUM(
+  CASE 
+    WHEN currency = 'COP' THEN amount
+    ELSE 0
+  END
+), 0) as total
+FROM contributions;
+`;
+const totalWithdrawals = await sql`
+SELECT COALESCE(SUM(
+  CASE 
+    WHEN currency = 'COP' THEN amount
+    ELSE 0 -- Ignorar USD
+  END
+), 0) as total
+FROM withdrawals;
+`;
+const totalPortfolio = await getPortfolioValueCOP(sql);
+const netReturn = totalPortfolio - Number(totalContributions[0].total) + Number(totalWithdrawals[0].total);
+const returnPercentage = Number(totalContributions[0].total) > 0 
+? ((netReturn / Number(totalContributions[0].total)) * 100).toFixed(2)
+: 0;
+
 const accounts = await sql`
   SELECT a.id, a.name, a.type, a.currency,
     COALESCE((
@@ -28,50 +80,6 @@ const accounts = await sql`
   ORDER BY a.name ASC;
 `;
 
-// ----------------------
-// 2. VALOR TOTAL PORTAFOLIO (COP)
-// ----------------------
-const totalPortfolio = await getPortfolioValueCOP(sql);
-
-// ----------------------
-// 3. ESTADÍSTICAS ADICIONALES
-// ----------------------
-// Total de contribuciones este mes
-const thisMonth = new Date().toISOString().slice(0, 7);
-const contributionsThisMonth = await sql`
-  SELECT COALESCE(SUM(amount), 0) as total
-  FROM contributions
-  WHERE date >= ${thisMonth + '-01'};
-`;
-
-// Total de retiros este mes
-const withdrawalsThisMonth = await sql`
-  SELECT COALESCE(SUM(amount), 0) as total
-  FROM withdrawals
-  WHERE date >= ${thisMonth + '-01'};
-`;
-
-// Contribuciones totales
-const totalContributions = await sql`
-  SELECT COALESCE(SUM(amount), 0) as total
-  FROM contributions;
-`;
-
-// Retiros totales
-const totalWithdrawals = await sql`
-  SELECT COALESCE(SUM(amount), 0) as total
-  FROM withdrawals;
-`;
-
-// Retorno neto (ganancia/pérdida)
-const netReturn = totalPortfolio - Number(totalContributions[0].total) + Number(totalWithdrawals[0].total);
-const returnPercentage = totalContributions[0].total > 0 
-  ? ((netReturn / Number(totalContributions[0].total)) * 100).toFixed(2)
-  : 0;
-
-// ----------------------
-// 4. ÚLTIMOS MOVIMIENTOS
-// ----------------------
 const movements = await sql`
   SELECT 'contribution' AS type, date, amount, currency, note
   FROM contributions
@@ -82,9 +90,6 @@ const movements = await sql`
   LIMIT 10;
 `;
 
-// ----------------------
-// 5. DISTRIBUCIÓN POR MONEDA
-// ----------------------
 const distributionByCurrency = await sql`
   SELECT 
     currency,
@@ -101,7 +106,6 @@ const distributionByCurrency = await sql`
   GROUP BY currency
   ORDER BY total_value DESC;
 `;
-console.log(distributionByCurrency);
 ---
 <Layout title="Admin Dashboard">
   <div class="flex min-h-screen bg-gray-50 w-full">
@@ -158,21 +162,16 @@ console.log(distributionByCurrency);
         <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           <!-- Total Portfolio -->
           <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-            <div class="flex items-center justify-between">
-              <div>
-                <p class="text-sm font-medium text-gray-600">Valor Total</p>
-                <p class="text-2xl font-bold text-gray-900 mt-2">
-                  ${(totalPortfolio / 1000).toFixed(3)}K
-                </p>
-                <p class="text-xs text-gray-500 mt-1">COP</p>
-              </div>
-              <div class="p-3 bg-blue-100 rounded-lg">
-                <svg class="w-8 h-8 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                </svg>
-              </div>
-            </div>
-          </div>
+  <div class="flex items-center justify-between">
+    <div>
+      <p class="text-sm font-medium text-gray-600">Valor Total</p>
+      <p class="text-2xl font-bold text-gray-900 mt-2">
+        {totalPortfolio.toLocaleString('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0 })}
+      </p>
+      <p class="text-xs text-gray-500 mt-1">COP</p>
+    </div>
+    </div>
+</div>
 
           <!-- Net Return -->
           <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
@@ -180,7 +179,7 @@ console.log(distributionByCurrency);
               <div>
                 <p class="text-sm font-medium text-gray-600">Retorno Neto</p>
                 <p class={`text-2xl font-bold mt-2 ${netReturn >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                  {netReturn >= 0 ? '+' : ''}{(netReturn / 1000).toFixed(3)}K
+                  {netReturn >= 0 ? '+' : ''}{netReturn.toLocaleString('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0 })}
                 </p>
                 <p class={`text-xs mt-1 ${netReturn >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                   {returnPercentage}% ROI
@@ -200,7 +199,7 @@ console.log(distributionByCurrency);
               <div>
                 <p class="text-sm font-medium text-gray-600">Aportes (Mes)</p>
                 <p class="text-2xl font-bold text-gray-900 mt-2">
-                  ${(Number(contributionsThisMonth[0].total) / 1000).toFixed(3)}K
+                  {Number(contributionsThisMonth[0].total).toLocaleString('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0 })}
                 </p>
                 <p class="text-xs text-gray-500 mt-1">Este mes</p>
               </div>
@@ -218,7 +217,7 @@ console.log(distributionByCurrency);
               <div>
                 <p class="text-sm font-medium text-gray-600">Retiros (Mes)</p>
                 <p class="text-2xl font-bold text-gray-900 mt-2">
-                  ${(Number(withdrawalsThisMonth[0].total) / 1000).toFixed(1)}K
+                  {Number(withdrawalsThisMonth[0].total).toLocaleString('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0 })}
                 </p>
                 <p class="text-xs text-gray-500 mt-1">Este mes</p>
               </div>

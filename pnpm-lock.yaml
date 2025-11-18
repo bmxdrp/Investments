@@ -11,9 +11,6 @@ importers:
       '@astrojs/vercel':
         specifier: ^9.0.1
         version: 9.0.1(astro@5.15.9(@types/node@24.10.1)(@vercel/functions@2.2.13)(jiti@2.6.1)(lightningcss@1.30.2)(rollup@4.53.2)(typescript@5.9.3))(rollup@4.53.2)
-      '@lucia-auth/adapter-postgresql':
-        specifier: ^3.1.2
-        version: 3.1.2(@neondatabase/serverless@1.0.2)(lucia@3.2.2)
       '@neondatabase/serverless':
         specifier: ^1.0.2
         version: 1.0.2
@@ -26,9 +23,6 @@ importers:
       astro:
         specifier: ^5.15.9
         version: 5.15.9(@types/node@24.10.1)(@vercel/functions@2.2.13)(jiti@2.6.1)(lightningcss@1.30.2)(rollup@4.53.2)(typescript@5.9.3)
-      lucia:
-        specifier: ^3.2.2
-        version: 3.2.2
       tailwindcss:
         specifier: ^4.1.17
         version: 4.1.17
@@ -404,22 +398,6 @@ packages:
   '@jridgewell/trace-mapping@0.3.31':
     resolution: {integrity: sha512-zzNR+SdQSDJzc8joaeP8QQoCQr8NuYx2dIIytl1QeBEZHJ9uW6hebsrYgbz8hJwUQao3TWCMtmfV8Nu1twOLAw==}
 
-  '@lucia-auth/adapter-postgresql@3.1.2':
-    resolution: {integrity: sha512-XgScy312JsaiyJZ0OaUHakk01hFBldF1m8abX4Ctk2Dkt7lEVS/u0xZ2Sf6Hlji1wZtEM0uiIWdeMUu79XcXZA==}
-    deprecated: This package has been deprecated. Please see https://lucia-auth.com/lucia-v3/migrate.
-    peerDependencies:
-      '@neondatabase/serverless': 0.7 - 0.9
-      lucia: 3.x
-      pg: ^8.8.0
-      postgres: ^3.3.0
-    peerDependenciesMeta:
-      '@neondatabase/serverless':
-        optional: true
-      pg:
-        optional: true
-      postgres:
-        optional: true
-
   '@mapbox/node-pre-gyp@2.0.0':
     resolution: {integrity: sha512-llMXd39jtP0HpQLVI37Bf1m2ADlEb35GYSh1SDSLsBhR+5iCxiNGlT31yqbNtVHygHAtMy6dWFERpU2JgufhPg==}
     engines: {node: '>=18'}
@@ -428,15 +406,6 @@ packages:
   '@neondatabase/serverless@1.0.2':
     resolution: {integrity: sha512-I5sbpSIAHiB+b6UttofhrN/UJXII+4tZPAq1qugzwCwLIL8EZLV7F/JyHUrEIiGgQpEXzpnjlJ+zwcEhheGvCw==}
     engines: {node: '>=19.0.0'}
-
-  '@oslojs/asn1@1.0.0':
-    resolution: {integrity: sha512-zw/wn0sj0j0QKbIXfIlnEcTviaCzYOY3V5rAyjR6YtOByFtJiT574+8p9Wlach0lZH9fddD4yb9laEAIl4vXQA==}
-
-  '@oslojs/binary@1.0.0':
-    resolution: {integrity: sha512-9RCU6OwXU6p67H4NODbuxv2S3eenuQ4/WFLrsq+K/k682xrznH5EVWA7N4VFk9VYVcbFtKqur5YQQZc0ySGhsQ==}
-
-  '@oslojs/crypto@1.0.1':
-    resolution: {integrity: sha512-7n08G8nWjAr/Yu3vu9zzrd0L9XnrJfpMioQcvCMxBIiF5orECHe5/3J0jmXRVvgfqMm/+4oxlQ+Sq39COYLcNQ==}
 
   '@oslojs/encoding@1.1.0':
     resolution: {integrity: sha512-70wQhgYmndg4GCPxPPxPGevRKqTIJ2Nh4OkiMWmDAVYsTQ+Ta7Sq+rPevXyXGdzr30/qZBnyOalCszoMxlyldQ==}
@@ -1264,10 +1233,6 @@ packages:
 
   lru-cache@10.4.3:
     resolution: {integrity: sha512-JNAzZcXrCt42VGLuYz0zfAzDfAvJWW6AfYlDBQyDV5DClI2m5sAmK+OIO7s59XfsRsWHp02jAJrRadPRGTt6SQ==}
-
-  lucia@3.2.2:
-    resolution: {integrity: sha512-P1FlFBGCMPMXu+EGdVD9W4Mjm0DqsusmKgO7Xc33mI5X1bklmsQb0hfzPhXomQr9waWIBDsiOjvr1e6BTaUqpA==}
-    deprecated: This package has been deprecated. Please see https://lucia-auth.com/lucia-v3/migrate.
 
   magic-string@0.30.21:
     resolution: {integrity: sha512-vd2F4YUyEXKGcLHoq+TEyCjxueSeHnFxyyjNp80yg0XV4vUhnDer/lvvlqM/arB5bXQN5K2/3oinyCRyx8T2CQ==}
@@ -2321,12 +2286,6 @@ snapshots:
       '@jridgewell/resolve-uri': 3.1.2
       '@jridgewell/sourcemap-codec': 1.5.5
 
-  '@lucia-auth/adapter-postgresql@3.1.2(@neondatabase/serverless@1.0.2)(lucia@3.2.2)':
-    dependencies:
-      lucia: 3.2.2
-    optionalDependencies:
-      '@neondatabase/serverless': 1.0.2
-
   '@mapbox/node-pre-gyp@2.0.0':
     dependencies:
       consola: 3.4.2
@@ -2344,17 +2303,6 @@ snapshots:
     dependencies:
       '@types/node': 22.19.1
       '@types/pg': 8.15.6
-
-  '@oslojs/asn1@1.0.0':
-    dependencies:
-      '@oslojs/binary': 1.0.0
-
-  '@oslojs/binary@1.0.0': {}
-
-  '@oslojs/crypto@1.0.1':
-    dependencies:
-      '@oslojs/asn1': 1.0.0
-      '@oslojs/binary': 1.0.0
 
   '@oslojs/encoding@1.1.0': {}
 
@@ -3217,11 +3165,6 @@ snapshots:
   longest-streak@3.1.0: {}
 
   lru-cache@10.4.3: {}
-
-  lucia@3.2.2:
-    dependencies:
-      '@oslojs/crypto': 1.0.1
-      '@oslojs/encoding': 1.1.0
 
   magic-string@0.30.21:
     dependencies:

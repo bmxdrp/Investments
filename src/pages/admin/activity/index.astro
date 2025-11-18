@@ -1,0 +1,300 @@
+---
+// src/pages/portfolio-values.astro
+import Default from "@layouts/default.astro";
+import Sidebar from "@components/sidebar.astro";
+import { sql } from "@lib/db";
+
+const portfolioValues = await sql`
+  SELECT 
+    pv.id,
+    pv.account_id,
+    pv.date,
+    pv.value,
+    pv.currency,
+    a.name as account_name,
+    a.type as account_type
+  FROM portfolio_values pv
+  JOIN accounts a ON pv.account_id = a.id
+  ORDER BY pv.date DESC, a.name
+`;
+
+const accounts = await sql`
+  SELECT id, name, type, currency
+  FROM accounts
+  ORDER BY name
+`;
+---
+
+<Default title="Valores de Portafolio">
+<Sidebar activePage="activity" />
+<main class="flex-1 ml-64 p-8 overflow-y-auto">
+      <div class="max-w-6xl mx-auto space-y-6">
+    <div class="mb-8">
+      <h1 class="text-3xl font-bold text-gray-800 mb-2">Valores de Portafolio</h1>
+      <p class="text-gray-600">Gestiona los valores históricos de tus cuentas</p>
+    </div>
+
+    <!-- Formulario -->
+    <div class="bg-white rounded-lg shadow-md p-6 mb-8">
+      <h2 class="text-xl font-semibold text-gray-800 mb-4" id="form-title">Agregar Valor</h2>
+      <form id="portfolio-form" class="space-y-4">
+        <input type="hidden" id="edit-id" value="">
+        
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div>
+            <label for="account_id" class="block text-sm font-medium text-gray-700 mb-1">
+              Cuenta *
+            </label>
+            <select 
+              id="account_id" 
+              name="account_id" 
+              required
+              class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            >
+              <option value="">Seleccionar cuenta</option>
+              {accounts.map((account) => (
+                <option value={account.id}>
+                  {account.name} ({account.type})
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label for="date" class="block text-sm font-medium text-gray-700 mb-1">
+              Fecha *
+            </label>
+            <input 
+              type="date" 
+              id="date" 
+              name="date" 
+              required
+              class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            >
+          </div>
+
+          <div>
+            <label for="value" class="block text-sm font-medium text-gray-700 mb-1">
+              Valor *
+            </label>
+            <input 
+              type="number" 
+              id="value" 
+              name="value" 
+              step="0.01" 
+              required
+              placeholder="0.00"
+              class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            >
+          </div>
+
+          <div>
+            <label for="currency" class="block text-sm font-medium text-gray-700 mb-1">
+              Moneda *
+            </label>
+            <select 
+              id="currency" 
+              name="currency" 
+              required
+              class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            >
+              <option value="">Seleccionar</option>
+              <option value="COP">COP</option>
+              <option value="USD">USD</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="flex gap-2">
+          <button 
+            type="submit" 
+            class="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors font-medium"
+          >
+            Guardar
+          </button>
+          <button 
+            type="button" 
+            id="cancel-btn"
+            class="px-6 py-2 bg-gray-300 text-gray-700 rounded-md hover:bg-gray-400 transition-colors font-medium hidden"
+          >
+            Cancelar
+          </button>
+        </div>
+      </form>
+    </div>
+
+    <!-- Tabla -->
+    <div class="bg-white rounded-lg shadow-md overflow-hidden">
+      <div class="overflow-x-auto">
+        <table class="min-w-full divide-y divide-gray-200">
+          <thead class="bg-gray-50">
+            <tr>
+              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Cuenta
+              </th>
+              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Tipo
+              </th>
+              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Fecha
+              </th>
+              <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Valor
+              </th>
+              <th class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Moneda
+              </th>
+              <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Acciones
+              </th>
+            </tr>
+          </thead>
+          <tbody id="values-table" class="bg-white divide-y divide-gray-200">
+            {portfolioValues.map((pv) => (
+              <tr class="hover:bg-gray-50" data-id={pv.id}>
+                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                  {pv.account_name}
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                  {pv.account_type}
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                  {new Date(pv.date).toLocaleDateString('es-CO')}
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 text-right font-medium">
+                  {new Intl.NumberFormat('es-CO', { 
+                    minimumFractionDigits: 2, 
+                    maximumFractionDigits: 2 
+                  }).format(Number(pv.value))}
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap text-center">
+                  <span class={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                    pv.currency === 'USD' 
+                      ? 'bg-green-100 text-green-800' 
+                      : 'bg-blue-100 text-blue-800'
+                  }`}>
+                    {pv.currency}
+                  </span>
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                  <button 
+                    class="edit-btn text-blue-600 hover:text-blue-900 mr-3"
+                    data-id={pv.id}
+                    data-account-id={pv.account_id}
+                    data-date={pv.date}
+                    data-value={pv.value}
+                    data-currency={pv.currency}
+                  >
+                    <svg class="w-5 h-5 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
+              </svg>
+                  </button>
+                  <button 
+                    class="delete-btn text-red-600 hover:text-red-900"
+                    data-id={pv.id}
+                  >
+                    <svg class="w-5 h-5 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+              </svg>
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</main>
+
+  <script>
+    const form = document.getElementById('portfolio-form') as HTMLFormElement;
+    const editIdInput = document.getElementById('edit-id') as HTMLInputElement;
+    const formTitle = document.getElementById('form-title') as HTMLHeadingElement;
+    const cancelBtn = document.getElementById('cancel-btn') as HTMLButtonElement;
+    const table = document.getElementById('values-table') as HTMLTableElement;
+
+    // Submit form
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const formData = new FormData(form);
+      const data = {
+        account_id: parseInt(formData.get('account_id') as string),
+        date: formData.get('date'),
+        value: parseFloat(formData.get('value') as string),
+        currency: formData.get('currency')
+      };
+
+      const editId = editIdInput.value;
+      const url = editId 
+        ? `/api/portfolio-values/${editId}` 
+        : '/api/portfolio-values';
+      const method = editId ? 'PUT' : 'POST';
+
+      try {
+        const response = await fetch(url, {
+          method,
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(data)
+        });
+
+        if (response.ok) {
+          window.location.reload();
+        } else {
+          const error = await response.json();
+          alert(error.error || 'Error al guardar');
+        }
+      } catch (error) {
+        alert('Error de conexión');
+      }
+    });
+
+    // Edit button
+    document.querySelectorAll('.edit-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const target = e.target as HTMLButtonElement;
+        editIdInput.value = target.dataset.id || '';
+        (document.getElementById('account_id') as HTMLSelectElement).value = target.dataset.accountId || '';
+        (document.getElementById('date') as HTMLInputElement).value = target.dataset.date?.split('T')[0] || '';
+        (document.getElementById('value') as HTMLInputElement).value = target.dataset.value || '';
+        (document.getElementById('currency') as HTMLSelectElement).value = target.dataset.currency || '';
+        
+        formTitle.textContent = 'Editar Valor';
+        cancelBtn.classList.remove('hidden');
+        form.scrollIntoView({ behavior: 'smooth' });
+      });
+    });
+
+    // Cancel button
+    cancelBtn.addEventListener('click', () => {
+      form.reset();
+      editIdInput.value = '';
+      formTitle.textContent = 'Agregar Valor';
+      cancelBtn.classList.add('hidden');
+    });
+
+    // Delete button
+    document.querySelectorAll('.delete-btn').forEach(btn => {
+      btn.addEventListener('click', async (e) => {
+        if (!confirm('¿Estás seguro de eliminar este valor?')) return;
+        
+        const target = e.target as HTMLButtonElement;
+        const id = target.dataset.id;
+
+        try {
+          const response = await fetch(`/api/portfolio-values/${id}`, {
+            method: 'DELETE'
+          });
+
+          if (response.ok) {
+            window.location.reload();
+          } else {
+            alert('Error al eliminar');
+          }
+        } catch (error) {
+          alert('Error de conexión');
+        }
+      });
+    });
+  </script>
+</Default>
