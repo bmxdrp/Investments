@@ -27,9 +27,8 @@ export const POST: APIRoute = async ({ request }) => {
     `;
 
     if (existing.length > 0) {
-      return new Response(JSON.stringify({ error: "El correo ya está registrado" }), {
-        status: 400,
-      });
+      console.error("Error:", "El correo ya está registrado");
+    return Response.redirect(new URL("/auth/register?error=" + encodeURIComponent("El correo ya está registrado"), request.url), 303);
     }
 
     // Generar UUID como id
@@ -45,14 +44,10 @@ export const POST: APIRoute = async ({ request }) => {
       RETURNING id, email;
     `;
 
-    return new Response(JSON.stringify({ user: user[0] }), {
-      status: 200,
-    });
+    return Response.redirect(new URL("/auth/register?success=1", request.url), 303);
 
   } catch (err) {
     console.error(err);
-    return new Response(JSON.stringify({ error: "Error en el servidor" }), {
-      status: 500,
-    });
+    return Response.redirect(new URL("/auth/register?error=" + encodeURIComponent("Error al registrar el usuario"), request.url), 303);
   }
 };

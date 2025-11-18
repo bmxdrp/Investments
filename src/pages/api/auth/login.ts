@@ -28,9 +28,9 @@ export const POST: APIRoute = async ({ request }) => {
     `;
 
     if (user.length === 0) {
-      return new Response(JSON.stringify({ error: "Usuario o contraseña incorrectos" }), {
-        status: 401,
-      });
+      const err = new Error("Usuario o contraseña incorrectos");
+      console.error("Error:", err.message);
+    return Response.redirect(new URL("/auth/login?error=" + encodeURIComponent(err.message), request.url), 303);
     }
 
     const found = user[0];
@@ -38,9 +38,9 @@ export const POST: APIRoute = async ({ request }) => {
     // Validar contraseña
     const valid = await argon2.verify(found.password_hash, parsed.password);
     if (!valid) {
-      return new Response(JSON.stringify({ error: "Usuario o contraseña incorrectos" }), {
-        status: 401,
-      });
+      const err = new Error("Usuario o contraseña incorrectos");
+      console.error("Error:", err.message);
+    return Response.redirect(new URL("/auth/login?error=" + encodeURIComponent(err.message), request.url), 303);
     }
 
     // Crear sesión
@@ -56,15 +56,13 @@ export const POST: APIRoute = async ({ request }) => {
     const headers = new Headers({
       "Set-Cookie":
         `session=${sessionId}; Path=/; HttpOnly; Secure; SameSite=Strict; Expires=${expiresAt.toUTCString()}`,
-      "Location": returnTo,
+      "Location": "/admin",
     });
 
     return new Response(null, { status: 302, headers });
 
-  } catch (err) {
-    console.error(err);
-    return new Response(JSON.stringify({ error: "Error en el servidor" }), {
-      status: 500,
-    });
+  } catch (error) {
+      console.error("Error de servidor:", error);
+    return Response.redirect(new URL("/auth/login?error=" + encodeURIComponent("error de servidor"), request.url), 303);
   }
 };

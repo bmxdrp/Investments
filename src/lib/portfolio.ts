@@ -38,6 +38,5 @@ export async function getPortfolioValueCOP(sql: NeonQueryFunction<any, any>) {
 
     total += value;
   }
-
   return total;
 }

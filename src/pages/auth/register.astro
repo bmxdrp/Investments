@@ -1,50 +1,27 @@
 ---
-layout: null;
+import Layout from "@layouts/default.astro";
+const returnTo = Astro.url.searchParams.get("returnTo") || "/";
+const safeReturnTo = returnTo.startsWith("/") ? returnTo : "/";
+const error = Astro.url.searchParams.get("error") || null;
+const success = Astro.url.searchParams.get("success") || null;
 ---
-
-<!DOCTYPE html>
-<html lang="es">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Crear cuenta</title>
-
-  <!-- Tailwind (si ya está cargado en tu proyecto, esto no es necesario) -->
-  <link rel="stylesheet" href="/styles/tailwind.css" />
-</head>
-
-<body class="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-4">
-
+<Layout title="Register">
   <div 
-    class="w-full max-w-lg bg-white/10 backdrop-blur-xl border border-white/20 
-           shadow-2xl rounded-2xl p-8 animate-fadeIn"
+    class="w-full max-w-md bg-white/10 backdrop-blur-xl border border-white/20 
+           shadow-2xl rounded-2xl p-8 animate-fadeIn mx-auto mt-24"
   >
-    <h1 class="text-3xl font-bold text-white text-center mb-2">Crear Cuenta</h1>
+    <h1 class="text-3xl font-bold text-white text-center mb-2">Bienvenido</h1>
     <p class="text-slate-300 text-center mb-6">
       Regístrate para acceder al panel administrativo
     </p>
 
-    <form method="POST" action="/api/auth/register" class="space-y-5">
-
-      <!-- Nombre -->
-      <div>
-        <label class="text-slate-200 text-sm mb-1 block">Nombre</label>
-        <input 
-          type="text"
-          name="name"
-          required
-          placeholder="Tu nombre"
-          class="w-full px-4 py-3 rounded-xl bg-white/20 border border-white/20 
-                 text-white placeholder-slate-300 focus:outline-none focus:ring-2 
-                 focus:ring-blue-400"
-        />
-      </div>
-
+    <form method="POST" action={`/api/auth/register?returnTo=${safeReturnTo}`} class="space-y-5">
+      
       <!-- Email -->
       <div>
         <label class="text-slate-200 text-sm mb-1 block">Correo</label>
         <input 
-          type="email"
+          type="email" 
           name="email"
           required
           placeholder="tucorreo@mail.com"
@@ -58,7 +35,7 @@ layout: null;
       <div>
         <label class="text-slate-200 text-sm mb-1 block">Contraseña</label>
         <input 
-          type="password"
+          type="password" 
           name="password"
           required
           placeholder="••••••••"
@@ -82,7 +59,7 @@ layout: null;
         />
       </div>
 
-      <!-- Botón -->
+      <!-- Botón login -->
       <button
         type="submit"
         class="w-full py-3 rounded-xl bg-blue-500 hover:bg-blue-600 transition 
@@ -91,14 +68,30 @@ layout: null;
         Crear Cuenta
       </button>
     </form>
-
-    <p class="text-center text-slate-400 text-sm mt-6">
-      ¿Ya tienes una cuenta?
-      <a href="/login" class="text-blue-400 hover:underline">Iniciar sesión</a>
-    </p>
-
+{success === "1" && (
+          <div class="bg-green-50 border border-green-200 mt-4 rounded-lg p-2 flex items-start gap-3">
+            <svg class="h-5 w-5 text-green-400" fill="currentColor" viewBox="0 0 20 20">
+                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
+              </svg>
+            <div>
+              <p class="text-sm font-medium text-green-800">Usuario registrado con éxito.</p>
+               Ya puedes <a href="/auth/login" class="text-blue-400 hover:underline">iniciar sesión</a>.
+            </div>
+          </div>
+        )}
+{error && (
+          <div class="bg-red-50 border border-red-200 mt-4 rounded-lg p-2 flex items-start gap-3">
+            <svg class="h-5 w-5 text-red-500 shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+              <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"/>
+            </svg>
+            <div>
+              <p class="text-sm font-medium text-red-800">Error al realizar la operación</p>
+              {error && <p class="mt-1 text-sm text-red-700">{decodeURIComponent(error)}</p>}
+            </div>
+          </div>
+        )}
   </div>
-
+</Layout>
   <style>
     @keyframes fadeIn {
       from { opacity: 0; transform: translateY(20px); }
@@ -108,6 +101,3 @@ layout: null;
       animation: fadeIn 0.7s ease-out forwards;
     }
   </style>
-
-</body>
-</html>

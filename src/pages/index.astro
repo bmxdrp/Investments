@@ -1,16 +1,55 @@
 ---
-
+import Layout from "@layouts/default.astro";
 ---
+<Layout title="Admin Dashboard">
+    <!-- Header -->
+    <header class="max-w-7xl mx-auto px-6 py-6 flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <div class="bg-indigo-600 text-white rounded-md px-3 py-2 font-semibold">INV</div>
+        <div>
+          <h1 class="text-lg font-bold text-white">Inversion</h1>
+          <p class="text-sm text-slate-400">Registra y gestiona tus inversiones</p>
+        </div>
+      </div>
 
-<html lang="en">
-	<head>
-		<meta charset="utf-8" />
-		<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-		<meta name="viewport" content="width=device-width" />
-		<meta name="generator" content={Astro.generator} />
-		<title>Astro</title>
-	</head>
-	<body>
-		<h1>Astro</h1>
-	</body>
-</html>
+      <nav class="flex items-center gap-4">
+        <a href="#features" class="text-sm hover:underline text-slate-300">Características</a>
+        <a href="#faq" class="text-sm hover:underline text-slate-300">FAQ</a>
+        <a
+          href="/auth/login"
+          class="text-sm px-4 py-2 border border-indigo-500 text-indigo-400 rounded-md hover:bg-indigo-600/20"
+        >
+          Iniciar sesión
+        </a>
+      </nav>
+    </header>
+
+    <!-- Main -->
+    <main class="w-full flex flex-col items-center max-w-6xl mx-auto px-6 pt-20 ">
+        <!-- Hero -->
+          <h2 class="text-4xl sm:text-5xl font-extrabold text-white leading-tight">
+            Empieza a invertir con seguridad
+          </h2>
+          <p class="mt-4 text-lg text-slate-300">
+            Plataforma confiable para administrar tu portafolio de inversiones.
+          </p>
+
+          <ul class="mt-20 grid grid-cols-1 gap-10">
+            <li class="flex items-start gap-3">
+              <span class="inline-flex items-center justify-center h-9 w-9 rounded-lg bg-indigo-700 text-white font-bold">✓</span>
+              <div>
+                <div class="font-medium text-white">Reportes en tiempo real</div>
+                <div class="text-sm text-slate-400">Accede a datos actualizados de tu rendimiento.</div>
+              </div>
+            </li>
+
+            <li class="flex items-start gap-3">
+              <span class="inline-flex items-center justify-center h-9 w-9 rounded-lg bg-indigo-700 text-white font-bold">🔒</span>
+              <div>
+                <div class="font-medium text-white">Máxima seguridad</div>
+                <div class="text-sm text-slate-400">Tus datos protegidos con cifrado moderno.</div>
+              </div>
+            </li>
+          </ul>
+    </main>
+</Layout>

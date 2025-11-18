@@ -2,11 +2,12 @@
 import Layout from "@layouts/default.astro";
 const returnTo = Astro.url.searchParams.get("returnTo") || "/";
 const safeReturnTo = returnTo.startsWith("/") ? returnTo : "/";
+const error = Astro.url.searchParams.get("error") || null;
 ---
 <Layout title="Login">
   <div 
     class="w-full max-w-md bg-white/10 backdrop-blur-xl border border-white/20 
-           shadow-2xl rounded-2xl p-8 animate-fadeIn"
+           shadow-2xl rounded-2xl p-8 animate-fadeIn mx-auto mt-24"
   >
     <h1 class="text-3xl font-bold text-white text-center mb-2">Bienvenido</h1>
     <p class="text-slate-300 text-center mb-6">
@@ -52,7 +53,17 @@ const safeReturnTo = returnTo.startsWith("/") ? returnTo : "/";
         Iniciar Sesión
       </button>
     </form>
-
+{error && (
+          <div class="bg-red-50 border border-red-200 mt-4 rounded-lg p-2 flex items-start gap-3">
+            <svg class="h-5 w-5 text-red-500 shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+              <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"/>
+            </svg>
+            <div>
+              <p class="text-sm font-medium text-red-800">Error al realizar la operación</p>
+              {error && <p class="mt-1 text-sm text-red-700">{decodeURIComponent(error)}</p>}
+            </div>
+          </div>
+        )}
     <!-- Extra -->
     <p class="text-center text-slate-400 text-sm mt-6">
       ¿Olvidaste tu contraseña? 

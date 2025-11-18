@@ -60,9 +60,9 @@ export const POST: APIRoute = async ({ request }) => {
     return Response.redirect("/admin?contribution_success=1", 303);
 
 
-  } catch (err: any) {
+  } catch (err) {
     console.error("Error creating contribution:", err);
-    return Response.redirect(new URL("/admin?contribution_success=0&error=" + encodeURIComponent(err.message), request.url), 303);
+    return Response.redirect(new URL("/admin?error=" + encodeURIComponent("Error al crear la contribución"), request.url), 303);
 
   }
 };
