@@ -1,0 +1,110 @@
+---
+import Layout from "@/layouts/default.astro";
+const userId = Astro.locals.userId;
+if (!userId) {
+  return Astro.redirect("/auth/login");
+}
+
+const base = Astro.site ?? "http://localhost:4321";
+const res = await fetch(new URL("/api/accounts/accounts.json", base));
+const accounts = await res.json();
+
+async function handleSubmit(e: SubmitEvent) {
+  e.preventDefault();
+
+  const form = e.target as HTMLFormElement;
+  const data = {
+    account_id: Number(form.account_id.value),
+    date: form.date.value,
+    amount: parseFloat(form.amount.value),
+    currency: form.currency.value,
+    note: form.note.value || null
+  };
+
+  const res = await fetch("/api/contributions/create", {
+    method: "POST",
+    body: JSON.stringify(data)
+  });
+
+  if (res.ok) {
+    alert("Aporte guardado ✔️");
+    form.reset();
+  } else {
+    alert("Error al guardar");
+  }
+}
+---
+   
+<Layout title="Agregar inversión">
+  <h1>Agregar Inversión</h1>
+
+    <!-- Improved form for /admin/create -->
+<form method="POST" action="/api/contributions/create" class="max-w-xl mx-auto p-8 bg-slate-800 rounded-2xl shadow-xl border border-slate-700 space-y-6">
+  <h2 class="text-2xl font-bold text-white mb-4">Agregar inversión</h2>
+
+  <!-- Account Select -->
+  <div class="flex flex-col space-y-1">
+    <label for="account_id" class="text-sm font-semibold text-slate-300">Cuenta</label>
+    <select id="account_id" name="account_id" required class="p-3 rounded-xl bg-slate-700 text-white border border-slate-600 focus:(outline-none ring-2 ring-blue-500)">
+      {accounts.map((acc: any) => (
+            <option value={acc.id}>{acc.name} ({acc.currency})</option>
+          ))}
+    </select>
+  </div>
+
+  <!-- Date -->
+  <div class="flex flex-col space-y-1">
+    <label for="date" class="text-sm font-semibold text-slate-300">Fecha</label>
+    <input type="date" id="date" name="date" required class="p-3 rounded-xl bg-slate-700 text-white border border-slate-600 focus:(outline-none ring-2 ring-blue-500)" />
+  </div>
+
+  <!-- Amount -->
+  <div class="flex flex-col space-y-1">
+    <label for="amount" class="text-sm font-semibold text-slate-300">Monto</label>
+    <input type="number" id="amount" name="amount" step="0.01" required placeholder="0.00" class="p-3 rounded-xl bg-slate-700 text-white border border-slate-600 focus:(outline-none ring-2 ring-blue-500)" />
+  </div>
+
+  <!-- Currency -->
+  <div class="flex flex-col space-y-1">
+    <label for="currency" class="text-sm font-semibold text-slate-300">Moneda</label>
+    <select id="currency" name="currency" required class="p-3 rounded-xl bg-slate-700 text-white border border-slate-600 focus:(outline-none ring-2 ring-blue-500)">
+      <option value="COP">COP</option>
+      <option value="USD">USD</option>
+    </select>
+  </div>
+
+  <!-- Note -->
+  <div class="flex flex-col space-y-1">
+    <label for="note" class="text-sm font-semibold text-slate-300">Nota (opcional)</label>
+    <textarea id="note" name="note" rows="3" placeholder="Ej: aporte mensual" class="p-3 rounded-xl bg-slate-700 text-white border border-slate-600 resize-none focus:(outline-none ring-2 ring-blue-500)"></textarea>
+  </div>
+
+  <!-- Submit -->
+  <button type="submit" class="w-full py-3 mt-4 text-center font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-xl shadow-md transition-all">
+    Guardar inversión
+  </button>
+</form>
+
+</Layout>
+<script is:inline>
+  const form = document.getElementById("form");
+
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+
+    const data = Object.fromEntries(new FormData(form));
+
+    const res = await fetch("/api/contributions/create", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data)
+    });
+
+    if (res.ok) {
+      alert("Guardado!");
+      form.reset();
+    } else {
+      alert("Error al guardar");
+    }
+  });
+</script>

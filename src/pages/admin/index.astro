@@ -1,0 +1,112 @@
+---
+import Layout from "@layouts/default.astro";
+import { getPortfolioValueCOP } from "@lib/portfolio";
+
+import {sql} from "@lib/db";
+const userId = Astro.locals.userId;
+
+if (!userId) {
+  return Astro.redirect("/auth/login?returnTo=/admin");
+}
+
+const { searchParams } = Astro.url;
+const success = searchParams.get("contribution_success");
+const error = searchParams.get("error");
+
+// ----------------------
+// 1. OBTENER CUENTAS
+// ----------------------
+const accounts = await sql`
+  SELECT a.id, a.name, a.type, a.currency,
+    COALESCE((
+      SELECT value FROM portfolio_values pv
+      WHERE pv.account_id = a.id
+      ORDER BY date DESC LIMIT 1
+    ), 0) AS latest_value
+  FROM accounts a
+  ORDER BY a.name ASC;
+`;
+
+// ----------------------
+// 2. VALOR TOTAL PORTAFOLIO (COP)
+// ----------------------
+const totalPortfolio = await getPortfolioValueCOP(sql);
+
+// ----------------------
+// 3. ÚLTIMOS MOVIMIENTOS
+// ----------------------
+const movements = await sql`
+  SELECT 'contribution' AS type, date, amount, currency, note
+  FROM contributions
+  UNION ALL
+  SELECT 'withdrawal' AS type, date, amount, currency, note
+  FROM withdrawals
+  ORDER BY date DESC
+  LIMIT 10;
+`;
+---
+
+<Layout title="Admin Dashboard">
+  <main class="p-10 space-y-8">
+{success === "1" && (
+  <div class="bg-green-100 text-green-700 border border-green-300 px-4 py-2 rounded mb-4">
+    ✔️ Inversión registrada correctamente
+  </div>
+)}
+{error && (
+  <div class="bg-red-100 text-red-700 border border-red-300 px-4 py-2 rounded mb-4">
+    {error}
+  </div>
+)}
+    <!-- PORTAFOLIO TOTAL -->
+    <section class="p-6 bg-slate-800 rounded-xl border border-slate-700">
+      <h3 class="text-xl font-bold">Valor total del portafolio</h3>
+      <p class="mt-2 text-3xl font-semibold text-green-400">
+        {totalPortfolio.toLocaleString("es-CO")} COP
+      </p>
+    </section>
+
+    <!-- LISTA DE INVERSIONES -->
+    <section class="p-6 bg-slate-800 rounded-xl border border-slate-700">
+      <h3 class="text-xl font-bold">Inversiones</h3>
+      <div class="space-y-3 mt-4">
+        {accounts.map(acc => (
+          <div class="flex justify-between bg-slate-700 p-4 rounded-lg">
+            <div>
+              <p class="font-bold">{acc.name}</p>
+              <p class="text-xs text-slate-400">
+                {acc.type.toUpperCase()} · {acc.currency}
+              </p>
+            </div>
+            <p class="font-semibold text-blue-300">
+              {Number(acc.latest_value).toLocaleString("es-CO")} {acc.currency}
+            </p>
+          </div>
+        ))}
+      </div>
+    </section>
+
+    <!-- ÚLTIMOS MOVIMIENTOS -->
+    <section class="p-6 bg-slate-800 rounded-xl border border-slate-700">
+      <h3 class="text-xl font-bold">Últimos movimientos</h3>
+      <ul class="space-y-3 mt-4">
+        {movements.map(m => (
+          <li class="flex justify-between bg-slate-700 p-4 rounded-lg">
+            <div>
+              <p class="font-bold capitalize">{m.type}</p>
+              <p class="text-xs text-slate-400">
+                {new Date(m.date).toISOString().split("T")[0]}
+              </p>
+            </div>
+
+            <p class={m.type === "withdrawal" ? "text-red-400" : "text-green-400"}>
+              {m.type === "withdrawal" ? "-" : "+"}
+              {Number(m.amount).toLocaleString("es-CO")} {m.currency}
+            </p>
+          </li>
+        ))}
+      </ul>
+    </section>
+
+  </main>
+</Layout>
