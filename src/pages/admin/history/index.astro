@@ -104,7 +104,7 @@ const netMovement = totalContributions - totalWithdrawals;
               <div>
                 <p class="text-sm font-medium text-gray-600">Total Aportes</p>
                 <p class="text-2xl font-bold text-green-600 mt-2">
-                  ${(totalContributions / 1000000).toFixed(2)}M
+                  {(totalContributions).toLocaleString('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0 })}
                 </p>
                 <p class="text-xs text-gray-500 mt-1">Histórico</p>
               </div>
@@ -122,7 +122,7 @@ const netMovement = totalContributions - totalWithdrawals;
               <div>
                 <p class="text-sm font-medium text-gray-600">Total Retiros</p>
                 <p class="text-2xl font-bold text-red-600 mt-2">
-                  ${(totalWithdrawals / 1000000).toFixed(2)}M
+                  {(totalWithdrawals).toLocaleString('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0 })}
                 </p>
                 <p class="text-xs text-gray-500 mt-1">Histórico</p>
               </div>
@@ -140,7 +140,7 @@ const netMovement = totalContributions - totalWithdrawals;
               <div>
                 <p class="text-sm font-medium text-gray-600">Movimiento Neto</p>
                 <p class={`text-2xl font-bold mt-2 ${netMovement >= 0 ? 'text-blue-600' : 'text-orange-600'}`}>
-                  {netMovement >= 0 ? '+' : ''}{(netMovement / 1000000).toFixed(2)}M
+                  {netMovement >= 0 ? '+' : ''}{(netMovement).toLocaleString('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0 })}
                 </p>
                 <p class="text-xs text-gray-500 mt-1">Aportes - Retiros</p>
               </div>

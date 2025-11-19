@@ -27,6 +27,12 @@ if (rates.length > 0) {
   latestDate = new Date(rates[0].date).toLocaleDateString('es-CO', { dateStyle: 'medium' });
 }
 
+// Obtener el historial completo de tasas de cambio
+const rateHistory = await sql`
+  SELECT usd_to_cop, date
+  FROM exchange_rates
+  ORDER BY date DESC;
+`;
 
 // ----------------------
 // Manejo de la Petición POST
@@ -53,13 +59,13 @@ if (Astro.request.method === "POST") {
     `;
 
     // Redirigir para limpiar el formulario y mostrar el mensaje de éxito
-    return Response.redirect("/admin/exchange?success=1"), 303;
+    return Response.redirect("/admin/exchange?success=1", 303);
 
   } catch (e) {
     console.error("Error al actualizar la tasa de cambio:", e);
     const errorMsg = e instanceof Error ? e.message : "Error desconocido al procesar la solicitud.";
     // Redirigir con mensaje de error
-    return Response.redirect(`/admin/exchange?error=${encodeURIComponent(errorMsg)}`), 303;
+    return Response.redirect(`/admin/exchange?error=1}`, 303);
   }
 }
 
@@ -101,7 +107,6 @@ if (urlSuccess === "1") {
             <p class="text-sm text-gray-500 mt-1">Fecha de Registro: {latestDate}</p>
         </div>
 
-
         <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
             <form method="POST" class="space-y-4">
                 <div>
@@ -135,6 +140,56 @@ if (urlSuccess === "1") {
                     Guardar Nueva Tasa
                 </button>
             </form>
+        </div>
+
+        <!-- Historial de Tasas de Cambio -->
+        <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+            <h3 class="text-lg font-semibold text-gray-900 mb-4">Historial de Tasas de Cambio</h3>
+            {rateHistory.length > 0 ? (
+              <div class="overflow-x-auto">
+                <table class="min-w-full divide-y divide-gray-200">
+                  <thead class="bg-gray-50">
+                    <tr>
+                      <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Fecha</th>
+                      <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Tasa USD/COP</th>
+                      <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Cambio</th>
+                    </tr>
+                  </thead>
+                  <tbody class="bg-white divide-y divide-gray-200">
+                    {rateHistory.map((rate, index) => {
+                      const currentRate = Number(rate.usd_to_cop);
+                      const previousRate = index < rateHistory.length - 1 ? Number(rateHistory[index + 1].usd_to_cop) : null;
+                      const change = previousRate ? currentRate - previousRate : null;
+                      const changePercent = previousRate ? ((change! / previousRate) * 100).toFixed(2) : null;
+                      
+                      return (
+                        <tr class="hover:bg-gray-50">
+                          <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                            {new Date(rate.date).toLocaleDateString('es-CO', { dateStyle: 'medium' })}
+                          </td>
+                          <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                            ${currentRate.toLocaleString('es-CO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          </td>
+                          <td class="px-6 py-4 whitespace-nowrap text-sm">
+                            {change !== null ? (
+                              <span class={`inline-flex items-center gap-1 ${change >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                {change >= 0 ? '↑' : '↓'}
+                                {Math.abs(change).toLocaleString('es-CO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                <span class="text-xs">({changePercent}%)</span>
+                              </span>
+                            ) : (
+                              <span class="text-gray-400 text-xs">Primera tasa</span>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <p class="text-gray-500 text-sm">No hay tasas de cambio registradas aún.</p>
+            )}
         </div>
       </div>
     </main>

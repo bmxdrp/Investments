@@ -1,5 +1,5 @@
 ---
-import Layout from "@layouts/default.astro";
+import Layout from "@layouts/home.astro";
 const returnTo = Astro.url.searchParams.get("returnTo") || "/";
 const safeReturnTo = returnTo.startsWith("/") ? returnTo : "/";
 const error = Astro.url.searchParams.get("error") || null;

@@ -185,17 +185,17 @@ const accounts = await sql`
                     data-value={pv.value}
                     data-currency={pv.currency}
                   >
-                    <svg class="w-5 h-5 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
-              </svg>
+                    <svg class="w-5 h-5 inline pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
+                    </svg>
                   </button>
                   <button 
                     class="delete-btn text-red-600 hover:text-red-900"
                     data-id={pv.id}
                   >
-                    <svg class="w-5 h-5 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
-              </svg>
+                    <svg class="w-5 h-5 inline pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                    </svg>
                   </button>
                 </td>
               </tr>
@@ -207,33 +207,33 @@ const accounts = await sql`
   </div>
 </main>
 
-  <script>
-    const form = document.getElementById('portfolio-form') as HTMLFormElement;
-    const editIdInput = document.getElementById('edit-id') as HTMLInputElement;
-    const formTitle = document.getElementById('form-title') as HTMLHeadingElement;
-    const cancelBtn = document.getElementById('cancel-btn') as HTMLButtonElement;
-    const table = document.getElementById('values-table') as HTMLTableElement;
+  <script is:inline>
+    const form = document.getElementById('portfolio-form');
+    const editIdInput = document.getElementById('edit-id');
+    const formTitle = document.getElementById('form-title');
+    const cancelBtn = document.getElementById('cancel-btn');
+    const table = document.getElementById('values-table');
 
     // Submit form
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
       const formData = new FormData(form);
       const data = {
-        account_id: parseInt(formData.get('account_id') as string),
+        account_id: parseInt(formData.get('account_id')),
         date: formData.get('date'),
-        value: parseFloat(formData.get('value') as string),
+        value: parseFloat(formData.get('value')),
         currency: formData.get('currency')
       };
 
       const editId = editIdInput.value;
       const url = editId 
-        ? `/api/portfolio-values/${editId}` 
+        ? '/api/portfolio-values/' + editId
         : '/api/portfolio-values';
       const method = editId ? 'PUT' : 'POST';
 
       try {
         const response = await fetch(url, {
-          method,
+          method: method,
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(data)
         });
@@ -249,15 +249,15 @@ const accounts = await sql`
       }
     });
 
-    // Edit button
+    // Edit button - usar closest para obtener el botón
     document.querySelectorAll('.edit-btn').forEach(btn => {
       btn.addEventListener('click', (e) => {
-        const target = e.target as HTMLButtonElement;
-        editIdInput.value = target.dataset.id || '';
-        (document.getElementById('account_id') as HTMLSelectElement).value = target.dataset.accountId || '';
-        (document.getElementById('date') as HTMLInputElement).value = target.dataset.date?.split('T')[0] || '';
-        (document.getElementById('value') as HTMLInputElement).value = target.dataset.value || '';
-        (document.getElementById('currency') as HTMLSelectElement).value = target.dataset.currency || '';
+        const button = e.currentTarget;
+        editIdInput.value = button.dataset.id || '';
+        document.getElementById('account_id').value = button.dataset.accountId || '';
+        document.getElementById('date').value = button.dataset.date ? button.dataset.date.split('T')[0] : '';
+        document.getElementById('value').value = button.dataset.value || '';
+        document.getElementById('currency').value = button.dataset.currency || '';
         
         formTitle.textContent = 'Editar Valor';
         cancelBtn.classList.remove('hidden');
@@ -273,16 +273,16 @@ const accounts = await sql`
       cancelBtn.classList.add('hidden');
     });
 
-    // Delete button
+    // Delete button - usar closest para obtener el botón
     document.querySelectorAll('.delete-btn').forEach(btn => {
       btn.addEventListener('click', async (e) => {
         if (!confirm('¿Estás seguro de eliminar este valor?')) return;
         
-        const target = e.target as HTMLButtonElement;
-        const id = target.dataset.id;
+        const button = e.currentTarget;
+        const id = button.dataset.id;
 
         try {
-          const response = await fetch(`/api/portfolio-values/${id}`, {
+          const response = await fetch('/api/portfolio-values/' + id, {
             method: 'DELETE'
           });
 

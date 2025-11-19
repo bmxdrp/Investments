@@ -57,12 +57,13 @@ export const POST: APIRoute = async ({ request }) => {
       `;
     }
 
-    return Response.redirect("/admin?contribution_success=1", 303);
+    return Response.redirect(new URL("/admin/contribute?contribution_success=1", request.url), 303);
 
 
   } catch (err) {
-    console.error("Error creating contribution:", err);
-    return Response.redirect(new URL("/admin?error=" + encodeURIComponent("Error al crear la contribución"), request.url), 303);
+    console.error("Error:", err);
+    const errorMessage = err instanceof Error ? err.message : "Unknown error occurred.";
+    return Response.redirect(new URL("/admin/contribute?contribution_success=0&error=" + encodeURIComponent(errorMessage), request.url), 303);
 
   }
 };

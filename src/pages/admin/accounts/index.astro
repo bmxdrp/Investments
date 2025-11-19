@@ -1,372 +1,360 @@
 ---
-// src/pages/accounts.astro
-import Layout from '@layouts/default.astro';
-import Sidebar from '@components/sidebar.astro';
+import Layout from "@layouts/default.astro";
+import Sidebar from "@components/sidebar.astro";
+import { sql } from "@lib/db";
+
 const userId = Astro.locals.userId;
 
 if (!userId) {
-  return Astro.redirect("/auth/login?returnTo=/admin/contribute");
+  return Astro.redirect("/auth/login?returnTo=/admin/accounts");
 }
+
+let message: { type: 'success' | 'error', text: string } | null = null;
+
+// Manejar POST para crear cuenta o subcuenta
+if (Astro.request.method === "POST") {
+  try {
+    const formData = await Astro.request.formData();
+    const action = formData.get("action");
+
+    // Si es una acción de eliminar
+    if (action === "delete") {
+      const accountId = formData.get("account_id");
+
+      if (!accountId) {
+        throw new Error("ID de cuenta no proporcionado.");
+      }
+
+      // Verificar si tiene subcuentas
+      const subaccounts = await sql`
+        SELECT COUNT(*) as count FROM accounts WHERE parent_account_id = ${accountId};
+      `;
+
+      if (Number(subaccounts[0].count) > 0) {
+        throw new Error("No puedes eliminar una cuenta con subcuentas activas.");
+      }
+
+      await sql`DELETE FROM accounts WHERE id = ${accountId};`;
+      return Astro.redirect("/admin/accounts?success=2");
+    }
+
+    // Si no, es crear cuenta/subcuenta
+    const name = formData.get("name");
+    const type = formData.get("type");
+    const currency = formData.get("currency");
+    const parentAccountId = formData.get("parent_account_id");
+
+    if (!name || !type || !currency) {
+      throw new Error("Todos los campos son obligatorios.");
+    }
+
+    if (parentAccountId && parentAccountId !== "") {
+      // Crear subcuenta
+      await sql`
+        INSERT INTO accounts (name, type, currency, parent_account_id)
+        VALUES (${name}, ${type}, ${currency}, ${parentAccountId});
+      `;
+    } else {
+      // Crear cuenta principal
+      await sql`
+        INSERT INTO accounts (name, type, currency)
+        VALUES (${name}, ${type}, ${currency});
+      `;
+    }
+
+    return Astro.redirect("/admin/accounts?success=1");
+  } catch (e) {
+    console.error("Error al procesar la solicitud:", e);
+    const errorMsg = e instanceof Error ? e.message : "Error desconocido";
+    return Astro.redirect(`/admin/accounts?error=${encodeURIComponent(errorMsg)}`);
+  }
+}
+
+// Mensajes de URL
+const urlSuccess = Astro.url.searchParams.get("success");
+const urlError = Astro.url.searchParams.get("error");
+
+if (urlSuccess === "1") {
+  message = { type: 'success', text: "Cuenta creada correctamente." };
+} else if (urlSuccess === "2") {
+  message = { type: 'success', text: "Cuenta eliminada correctamente." };
+} else if (urlError) {
+  message = { type: 'error', text: decodeURIComponent(urlError) };
+}
+
+// Obtener todas las cuentas
+const accounts = await sql`
+  SELECT a.id, a.name, a.type, a.currency, a.parent_account_id,
+    COALESCE((
+      SELECT value FROM portfolio_values pv
+      WHERE pv.account_id = a.id
+      ORDER BY date DESC LIMIT 1
+    ), 0) AS latest_value,
+    (SELECT COUNT(*) FROM accounts sub WHERE sub.parent_account_id = a.id) as subaccounts_count
+  FROM accounts a
+  ORDER BY 
+    COALESCE(a.parent_account_id, a.id) ASC,
+    CASE WHEN a.parent_account_id IS NULL THEN 0 ELSE 1 END ASC,
+    a.name ASC;
+`;
+
+// Organizar en jerarquía
+const mainAccounts = accounts.filter((acc: any) => acc.parent_account_id === null);
 ---
 
 <Layout title="Gestión de Cuentas">
-<Sidebar activePage="accounts" />
+  <div class="flex min-h-screen bg-gray-50 w-full">
+    <Sidebar activePage="accounts" />
 
-  <div class="container mx-auto px-4 py-8 max-w-6xl">
-    <div class="flex justify-between items-center mb-8">
-      <h1 class="text-3xl font-bold text-gray-800">Gestión de Cuentas</h1>
-      <button
-        id="btn-new-account"
-        class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition"
-      >
-        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
-        </svg>
-        Nueva Cuenta
-      </button>
-    </div>
-
-    <!-- Mensaje de error -->
-    <div id="error-message" class="hidden bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
-      <span id="error-text"></span>
-    </div>
-
-    <!-- Mensaje de éxito -->
-    <div id="success-message" class="hidden bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded mb-4">
-      <span id="success-text"></span>
-    </div>
-
-    <!-- Formulario Modal -->
-    <div id="modal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div class="bg-white rounded-lg shadow-xl p-6 w-full max-w-md">
-        <div class="flex justify-between items-center mb-4">
-          <h2 id="modal-title" class="text-2xl font-bold text-gray-800">Nueva Cuenta</h2>
-          <button id="btn-close-modal" class="text-gray-500 hover:text-gray-700">
-            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
-            </svg>
+    <main class="flex-1 ml-64 p-8 overflow-y-auto">
+      <div class="max-w-5xl mx-auto space-y-6">
+        <div class="flex items-center justify-between">
+          <div>
+            <h1 class="text-3xl font-bold text-gray-900">Gestión de Cuentas</h1>
+            <p class="text-gray-600 mt-1">Administra tus cuentas de inversión y subcuentas</p>
+          </div>
+          <button 
+            onclick="document.getElementById('createModal').classList.remove('hidden')"
+            class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-medium"
+          >
+            + Nueva Cuenta
           </button>
         </div>
 
-        <form id="account-form">
-          <input type="hidden" id="account-id" value="">
-          
-          <div class="mb-4">
-            <label for="name" class="block text-sm font-medium text-gray-700 mb-2">
-              Nombre de la Cuenta
-            </label>
-            <input
-              type="text"
-              id="name"
-              name="name"
-              required
-              class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              placeholder="Ej: Cuenta de Ahorros Principal"
-            >
+        {message && (
+          <div class={`p-4 rounded-lg border ${message.type === 'success' ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'}`}>
+            <p class={`text-sm font-medium ${message.type === 'success' ? 'text-green-800' : 'text-red-800'}`}>
+              {message.text}
+            </p>
           </div>
+        )}
 
-          <div class="mb-4">
-            <label for="type" class="block text-sm font-medium text-gray-700 mb-2">
-              Tipo de Cuenta
-            </label>
-            <input
-              type="text"
-              id="type"
-              name="type"
-              required
-              class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              placeholder="Ej: Ahorros, Inversión, etc."
-            >
+        <!-- Lista de Cuentas -->
+        <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+          <h3 class="text-lg font-semibold text-gray-900 mb-4">Todas las Cuentas</h3>
+          <div class="space-y-4">
+            {mainAccounts.map((acc: any) => {
+              const subaccounts = accounts.filter((sub: any) => sub.parent_account_id === acc.id);
+              return (
+                <div class="border border-gray-200 rounded-lg p-4">
+                  {/* Cuenta Principal */}
+                  <div class="flex items-center justify-between">
+                    <div class="flex items-center gap-4">
+                      <div class="p-3 bg-blue-100 rounded-lg">
+                        <svg class="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/>
+                        </svg>
+                      </div>
+                      <div>
+                        <p class="font-bold text-gray-900">{acc.name}</p>
+                        <p class="text-sm text-gray-500">{acc.type} · {acc.currency}</p>
+                      </div>
+                    </div>
+                    <div class="flex items-center gap-4">
+                      <div class="text-right">
+                        <p class="font-bold text-gray-900">{Number(acc.latest_value).toLocaleString("es-CO")}</p>
+                        <p class="text-xs text-gray-500">{acc.currency}</p>
+                      </div>
+                      <button
+                        onclick={`openSubaccountModal(${acc.id}, '${acc.name}')`}
+                        class="px-3 py-1 text-sm bg-green-100 text-green-700 rounded hover:bg-green-200 transition"
+                      >
+                        + Subcuenta
+                      </button>
+                      <button
+                        onclick={`confirmDelete(${acc.id}, '${acc.name}', ${subaccounts.length})`}
+                        class="px-3 py-1 text-sm bg-red-100 text-red-700 rounded hover:bg-red-200 transition"
+                      >
+                        Eliminar
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Subcuentas */}
+                  {subaccounts.length > 0 && (
+                    <div class="ml-12 mt-4 space-y-2">
+                      {subaccounts.map((sub: any) => (
+                        <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                          <div class="flex items-center gap-3">
+                            <svg class="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+                            </svg>
+                            <div>
+                              <p class="font-semibold text-gray-900 text-sm">{sub.name}</p>
+                              <p class="text-xs text-gray-500">{sub.type}</p>
+                            </div>
+                          </div>
+                          <div class="flex items-center gap-4">
+                            <div class="text-right">
+                              <p class="font-semibold text-gray-900 text-sm">{Number(sub.latest_value).toLocaleString("es-CO")}</p>
+                              <p class="text-xs text-gray-500">{sub.currency}</p>
+                            </div>
+                            <button
+                              onclick={`confirmDelete(${sub.id}, '${sub.name}', 0)`}
+                              class="px-2 py-1 text-xs bg-red-100 text-red-700 rounded hover:bg-red-200 transition"
+                            >
+                              Eliminar
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
-
-          <div class="mb-6">
-            <label for="currency" class="block text-sm font-medium text-gray-700 mb-2">
-              Moneda
-            </label>
-            <select
-              id="currency"
-              name="currency"
-              required
-              class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            >
-              <option value="COP">COP - Peso Colombiano</option>
-              <option value="USD">USD - Dólar Estadounidense</option>
-            </select>
-          </div>
-
-          <div class="flex gap-3">
-            <button
-              type="submit"
-              class="flex-1 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition"
-            >
-              Guardar
-            </button>
-            <button
-              type="button"
-              id="btn-cancel"
-              class="flex-1 bg-gray-300 hover:bg-gray-400 text-gray-700 px-4 py-2 rounded-lg font-medium transition"
-            >
-              Cancelar
-            </button>
-          </div>
-        </form>
+        </div>
       </div>
-    </div>
+    </main>
+  </div>
 
-    <!-- Tabla de Cuentas -->
-    <div class="bg-white rounded-lg shadow overflow-hidden">
-      <div id="loading" class="p-8 text-center">
-        <div class="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-        <p class="mt-2 text-gray-600">Cargando cuentas...</p>
-      </div>
-
-      <div id="accounts-container" class="hidden">
-        <table class="min-w-full divide-y divide-gray-200">
-          <thead class="bg-gray-50">
-            <tr>
-              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                ID
-              </th>
-              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Nombre
-              </th>
-              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Tipo
-              </th>
-              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Moneda
-              </th>
-              <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Acciones
-              </th>
-            </tr>
-          </thead>
-          <tbody id="accounts-tbody" class="bg-white divide-y divide-gray-200">
-            <!-- Las filas se insertarán aquí -->
-          </tbody>
-        </table>
-      </div>
-
-      <div id="empty-state" class="hidden p-8 text-center text-gray-500">
-        <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4"/>
-        </svg>
-        <p class="mt-2">No hay cuentas registradas</p>
-        <p class="text-sm">Haz clic en "Nueva Cuenta" para crear una</p>
-      </div>
+  <!-- Modal: Crear Cuenta Principal -->
+  <div id="createModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+    <div class="bg-white rounded-xl p-6 max-w-md w-full mx-4">
+      <h3 class="text-xl font-bold text-gray-900 mb-4">Crear Nueva Cuenta</h3>
+      <form method="POST" class="space-y-4">
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">Nombre de la Cuenta</label>
+          <input 
+            type="text" 
+            name="name" 
+            required 
+            class="w-full border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-blue-500"
+            placeholder="Ej: Interactive Brokers"
+          />
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">Tipo</label>
+          <select name="type" required class="w-full border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-blue-500">
+            <option value="broker">Broker</option>
+            <option value="fondo">Fondo de Inversión</option>
+            <option value="banco">Cuenta Bancaria</option>
+            <option value="cripto">Crypto Exchange</option>
+            <option value="otro">Otro</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">Moneda</label>
+          <select name="currency" required class="w-full border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-blue-500">
+            <option value="COP">COP</option>
+            <option value="USD">USD</option>
+          </select>
+        </div>
+        <div class="flex gap-3">
+          <button 
+            type="button"
+            onclick="closeCreateModal()"
+            class="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition"
+          >
+            Cancelar
+          </button>
+          <button 
+            type="submit"
+            class="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
+          >
+            Crear Cuenta
+          </button>
+        </div>
+      </form>
     </div>
   </div>
-</Layout>
+
+  <!-- Modal: Crear Subcuenta -->
+  <div id="subaccountModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+    <div class="bg-white rounded-xl p-6 max-w-md w-full mx-4">
+      <h3 class="text-xl font-bold text-gray-900 mb-4">Crear Subcuenta</h3>
+      <p class="text-sm text-gray-600 mb-4">Cuenta padre: <span id="parentAccountName" class="font-semibold"></span></p>
+      <form method="POST" class="space-y-4">
+        <input type="hidden" name="parent_account_id" id="parentAccountIdInput" />
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">Nombre de la Subcuenta</label>
+          <input 
+            type="text" 
+            name="name" 
+            required 
+            class="w-full border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-blue-500"
+            placeholder="Ej: Acciones Tech"
+          />
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">Tipo</label>
+          <select name="type" required class="w-full border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-blue-500">
+            <option value="Acciones">Acciones</option>
+            <option value="Renta Fija">Renta Fija</option>
+            <option value="Renta Variable">Renta Variable</option>
+            <option value="Liquidez">Liquidez</option>
+            <option value="Crecimiento">Crecimiento</option>
+            <option value="Oportunidad">Oportunidad</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">Moneda</label>
+          <select name="currency" required class="w-full border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-blue-500">
+            <option value="COP">COP</option>
+            <option value="USD">USD</option>
+          </select>
+        </div>
+        <div class="flex gap-3">
+          <button 
+            type="button"
+            onclick="closeSubaccountModal()"
+            class="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition"
+          >
+            Cancelar
+          </button>
+          <button 
+            type="submit"
+            class="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition"
+          >
+            Crear Subcuenta
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
   <script is:inline>
-    // Estado
-    let accounts = [];
-    let editingId = null;
-
-    // Elementos del DOM
-    const modal = document.getElementById('modal');
-    const modalTitle = document.getElementById('modal-title');
-    const accountForm = document.getElementById('account-form');
-    const accountIdInput = document.getElementById('account-id');
-    const nameInput = document.getElementById('name');
-    const typeInput = document.getElementById('type');
-    const currencyInput = document.getElementById('currency');
-    const accountsTbody = document.getElementById('accounts-tbody');
-    const loading = document.getElementById('loading');
-    const accountsContainer = document.getElementById('accounts-container');
-    const emptyState = document.getElementById('empty-state');
-    const errorMessage = document.getElementById('error-message');
-    const errorText = document.getElementById('error-text');
-    const successMessage = document.getElementById('success-message');
-    const successText = document.getElementById('success-text');
-
-    // Funciones de utilidad
-    function showError(message) {
-      errorText.textContent = message;
-      errorMessage.classList.remove('hidden');
-      setTimeout(() => errorMessage.classList.add('hidden'), 5000);
+    function openSubaccountModal(parentId, parentName) {
+      document.getElementById('parentAccountIdInput').value = parentId.toString();
+      document.getElementById('parentAccountName').textContent = parentName;
+      document.getElementById('subaccountModal').classList.remove('hidden');
     }
 
-    function showSuccess(message) {
-      successText.textContent = message;
-      successMessage.classList.remove('hidden');
-      setTimeout(() => successMessage.classList.add('hidden'), 3000);
+    function closeCreateModal() {
+      document.getElementById('createModal').classList.add('hidden');
     }
 
-    function openModal(account = null) {
-      if (account) {
-        modalTitle.textContent = 'Editar Cuenta';
-        accountIdInput.value = account.id;
-        nameInput.value = account.name;
-        typeInput.value = account.type;
-        currencyInput.value = account.currency;
-        editingId = account.id;
-      } else {
-        modalTitle.textContent = 'Nueva Cuenta';
-        accountForm.reset();
-        accountIdInput.value = '';
-        editingId = null;
-      }
-      modal.classList.remove('hidden');
+    function closeSubaccountModal() {
+      document.getElementById('subaccountModal').classList.add('hidden');
     }
 
-    function closeModal() {
-      modal.classList.add('hidden');
-      accountForm.reset();
-      editingId = null;
-    }
-
-    // Cargar cuentas
-    async function fetchAccounts() {
-      try {
-        const response = await fetch('/api/accounts');
-        if (!response.ok) throw new Error('Error al cargar cuentas');
-        accounts = await response.json();
-        renderAccounts();
-      } catch (error) {
-        showError(error.message);
-      } finally {
-        loading.classList.add('hidden');
-      }
-    }
-
-    // Renderizar cuentas
-    function renderAccounts() {
-      if (accounts.length === 0) {
-        accountsContainer.classList.add('hidden');
-        emptyState.classList.remove('hidden');
+    function confirmDelete(accountId, accountName, subaccountsCount) {
+      if (subaccountsCount > 0) {
+        alert('No puedes eliminar "' + accountName + '" porque tiene ' + subaccountsCount + ' subcuentas activas.');
         return;
       }
-
-      emptyState.classList.add('hidden');
-      accountsContainer.classList.remove('hidden');
-
-      accountsTbody.innerHTML = accounts.map(account => `
-        <tr class="hover:bg-gray-50">
-          <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-            ${account.id}
-          </td>
-          <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-            ${account.name}
-          </td>
-          <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
-            ${account.type}
-          </td>
-          <td class="px-6 py-4 whitespace-nowrap">
-            <span class="px-2 py-1 text-xs font-semibold rounded-full ${
-              account.currency === 'COP' ? 'bg-green-100 text-green-800' : 'bg-blue-100 text-blue-800'
-            }">
-              ${account.currency}
-            </span>
-          </td>
-          <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-            <button
-              data-action="edit"
-              data-id="${account.id}"
-              class="text-blue-600 hover:text-blue-900 mr-4"
-              title="Editar"
-            >
-              <svg class="w-5 h-5 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
-              </svg>
-            </button>
-            <button
-              data-action="delete"
-              data-id="${account.id}"
-              class="text-red-600 hover:text-red-900"
-              title="Eliminar"
-            >
-              <svg class="w-5 h-5 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
-              </svg>
-            </button>
-          </td>
-        </tr>
-      `).join('');
-    }
-
-    // Guardar cuenta
-    async function saveAccount(e) {
-      e.preventDefault();
       
-      const formData = {
-        name: nameInput.value,
-        type: typeInput.value,
-        currency: currencyInput.value
-      };
-
-      try {
-        const url = editingId ? `/api/accounts/${editingId}` : '/api/accounts';
-        const method = editingId ? 'PUT' : 'POST';
-
-        const response = await fetch(url, {
-          method,
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(formData)
-        });
-
-        if (!response.ok) {
-          const data = await response.json();
-          throw new Error(data.error || 'Error al guardar');
-        }
-
-        showSuccess(editingId ? 'Cuenta actualizada' : 'Cuenta creada');
-        closeModal();
-        await fetchAccounts();
-      } catch (error) {
-        showError(error.message);
+      if (confirm('¿Estás seguro de eliminar la cuenta "' + accountName + '"? Esta acción no se puede deshacer.')) {
+        const form = document.createElement('form');
+        form.method = 'POST';
+        form.action = window.location.href;
+        
+        const actionInput = document.createElement('input');
+        actionInput.type = 'hidden';
+        actionInput.name = 'action';
+        actionInput.value = 'delete';
+        form.appendChild(actionInput);
+        
+        const input = document.createElement('input');
+        input.type = 'hidden';
+        input.name = 'account_id';
+        input.value = accountId;
+        form.appendChild(input);
+        
+        document.body.appendChild(form);
+        form.submit();
       }
     }
-
-    // Eliminar cuenta
-    async function deleteAccount(id) {
-      if (!confirm('¿Estás seguro de eliminar esta cuenta? Esta acción no se puede deshacer.')) {
-        return;
-      }
-
-      try {
-        const response = await fetch(`/api/accounts/${id}`, {
-          method: 'DELETE'
-        });
-
-        if (!response.ok) {
-          const data = await response.json();
-          throw new Error(data.error || 'Error al eliminar');
-        }
-
-        showSuccess('Cuenta eliminada');
-        await fetchAccounts();
-      } catch (error) {
-        showError(error.message);
-      }
-    }
-
-    // Event Listeners
-    document.getElementById('btn-new-account').addEventListener('click', () => openModal());
-    document.getElementById('btn-close-modal').addEventListener('click', closeModal);
-    document.getElementById('btn-cancel').addEventListener('click', closeModal);
-    accountForm.addEventListener('submit', saveAccount);
-
-    // Delegación de eventos para botones de editar/eliminar
-    accountsTbody.addEventListener('click', (e) => {
-      const button = e.target.closest('button');
-      if (!button) return;
-
-      const action = button.dataset.action;
-      const id = button.dataset.id;
-
-      if (action === 'edit') {
-        const account = accounts.find(a => a.id == id);
-        if (account) openModal(account);
-      } else if (action === 'delete') {
-        deleteAccount(id);
-      }
-    });
-
-    // Cerrar modal al hacer clic fuera
-    modal.addEventListener('click', (e) => {
-      if (e.target === modal) closeModal();
-    });
-
-    // Cargar cuentas al iniciar
-    fetchAccounts();
   </script>
+</Layout>
