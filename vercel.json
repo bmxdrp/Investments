@@ -2,15 +2,7 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "crons": [
     {
-      "path": "/api/cron/usd_to_cop",
-      "schedule": "0 23 * * *"
-    },
-    {
-      "path": "/api/cron/calculate_net_return",
-      "schedule": "0 23 * * *"
-    },
-    {
-      "path": "/api/cron/save_account_values",
+      "path": "/api/cron",
       "schedule": "0 23 * * *"
     }
   ]
