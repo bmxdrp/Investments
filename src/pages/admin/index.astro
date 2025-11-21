@@ -34,17 +34,20 @@ const { netReturn, returnPercentage } = calculateReturns(
 <Layout title="Admin Dashboard">
   <div class="flex min-h-screen bg-gray-50 w-full">
     <Sidebar activePage="dashboard" />
-    <main class="flex-1 ml-64 p-8 overflow-y-auto">
-      <div class="max-w-7xl mx-auto space-y-6">
-        <!-- Header -->
-        <div class="flex items-center justify-between">
+    
+    <!-- Main content con padding responsive y espacio para el botón hamburguesa -->
+    <main class="flex-1 w-full md:ml-64 p-4 sm:p-6 lg:p-8 pt-16 md:pt-8 overflow-y-auto">
+      <div class="max-w-7xl mx-auto space-y-4 sm:space-y-6">
+        
+        <!-- Header responsive -->
+        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <div>
-            <h1 class="text-3xl font-bold text-gray-900">Dashboard</h1>
-            <p class="text-gray-600 mt-1">Resumen de tus inversiones</p>
+            <h1 class="text-2xl sm:text-3xl font-bold text-gray-900">Dashboard</h1>
+            <p class="text-sm sm:text-base text-gray-600 mt-1">Resumen de tus inversiones</p>
           </div>
-          <div class="text-right">
-            <p class="text-sm text-gray-600">Última actualización</p>
-            <p class="text-sm font-medium text-gray-900">
+          <div class="text-left sm:text-right">
+            <p class="text-xs sm:text-sm text-gray-600">Última actualización</p>
+            <p class="text-xs sm:text-sm font-medium text-gray-900">
               {new Date().toLocaleDateString('es-CO', { dateStyle: 'medium' })}
             </p>
           </div>
@@ -52,64 +55,65 @@ const { netReturn, returnPercentage } = calculateReturns(
 
         <!-- Mensajes de éxito/error -->
         {funds_success === "1" && (
-          <div class="bg-green-50 border border-green-200 rounded-lg p-4 flex items-start gap-3">
-            <svg class="h-5 w-5 text-green-500 shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+          <div class="bg-green-50 border border-green-200 rounded-lg p-3 sm:p-4 flex items-start gap-2 sm:gap-3">
+            <svg class="h-4 w-4 sm:h-5 sm:w-5 text-green-500 shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
               <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
             </svg>
-            <p class="text-sm font-medium text-green-800">Inversión registrada correctamente</p>
+            <p class="text-xs sm:text-sm font-medium text-green-800">Inversión registrada correctamente</p>
           </div>
         )}
 
         {withdrawSuccess === '1' && (
-          <div class="bg-green-50 border border-green-200 rounded-lg p-4 flex items-start gap-3">
-            <svg class="h-5 w-5 text-green-500 shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+          <div class="bg-green-50 border border-green-200 rounded-lg p-3 sm:p-4 flex items-start gap-2 sm:gap-3">
+            <svg class="h-4 w-4 sm:h-5 sm:w-5 text-green-500 shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
               <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
             </svg>
-            <p class="text-sm font-medium text-green-800">Retiro realizado exitosamente</p>
+            <p class="text-xs sm:text-sm font-medium text-green-800">Retiro realizado exitosamente</p>
           </div>
         )}
 
         {(withdrawSuccess === '0' || error) && (
-          <div class="bg-red-50 border border-red-200 rounded-lg p-4 flex items-start gap-3">
-            <svg class="h-5 w-5 text-red-500 shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+          <div class="bg-red-50 border border-red-200 rounded-lg p-3 sm:p-4 flex items-start gap-2 sm:gap-3">
+            <svg class="h-4 w-4 sm:h-5 sm:w-5 text-red-500 shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
               <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"/>
             </svg>
-            <div>
-              <p class="text-sm font-medium text-red-800">Error al realizar la operación</p>
-              {error && <p class="mt-1 text-sm text-red-700">{decodeURIComponent(error)}</p>}
+            <div class="flex-1 min-w-0">
+              <p class="text-xs sm:text-sm font-medium text-red-800">Error al realizar la operación</p>
+              {error && <p class="mt-1 text-xs sm:text-sm text-red-700 break-words">{decodeURIComponent(error)}</p>}
             </div>
           </div>
         )}
 
-        <!-- Stats Cards -->
-        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <!-- Stats Cards - Responsive grid -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 lg:gap-6">
+          
           <!-- Total Portfolio -->
-          <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+          <div class="bg-white rounded-lg sm:rounded-xl shadow-sm border border-gray-200 p-4 sm:p-6">
             <div class="flex items-center justify-between">
-              <div>
-                <p class="text-sm font-medium text-gray-600">Valor Total</p>
-                <p class="text-2xl font-bold text-gray-900 mt-2">
+              <div class="flex-1 min-w-0">
+                <p class="text-xs sm:text-sm font-medium text-gray-600">Valor Total</p>
+                <p class="text-lg sm:text-2xl font-bold text-gray-900 mt-1 sm:mt-2 truncate">
                   {totalPortfolio.toLocaleString('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0 })}
                 </p>
-                <p class="text-xs text-gray-500 mt-1">COP</p>
+                <p class="text-xs text-gray-500 mt-0.5 sm:mt-1">COP</p>
               </div>
             </div>
           </div>
 
           <!-- Net Return -->
-          <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-            <div class="flex items-center justify-between">
-              <div>
-                <p class="text-sm font-medium text-gray-600">Retorno Neto</p>
-                <p class={`text-2xl font-bold mt-2 ${netReturn >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+          <div class="bg-white rounded-lg sm:rounded-xl shadow-sm border border-gray-200 p-4 sm:p-6">
+            <div class="flex items-center justify-between gap-2">
+              <div class="flex-1 min-w-0">
+                <p class="text-xs sm:text-sm font-medium text-gray-600">Retorno Neto</p>
+                <p class={`text-lg sm:text-2xl font-bold mt-1 sm:mt-2 truncate ${netReturn >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                   {netReturn >= 0 ? '+' : ''}{netReturn.toLocaleString('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0 })}
                 </p>
-                <p class={`text-xs mt-1 ${netReturn >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                <p class={`text-xs mt-0.5 sm:mt-1 ${netReturn >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                   {returnPercentage}% ROI
                 </p>
               </div>
-              <div class={`p-3 rounded-lg ${netReturn >= 0 ? 'bg-green-100' : 'bg-red-100'}`}>
-                <svg class={`w-8 h-8 ${netReturn >= 0 ? 'text-green-600' : 'text-red-600'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <div class={`p-2 sm:p-3 rounded-lg shrink-0 ${netReturn >= 0 ? 'bg-green-100' : 'bg-red-100'}`}>
+                <svg class={`w-6 h-6 sm:w-8 sm:h-8 ${netReturn >= 0 ? 'text-green-600' : 'text-red-600'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"/>
                 </svg>
               </div>
@@ -117,17 +121,17 @@ const { netReturn, returnPercentage } = calculateReturns(
           </div>
 
           <!-- This Month Contributions -->
-          <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-            <div class="flex items-center justify-between">
-              <div>
-                <p class="text-sm font-medium text-gray-600">Aportes (Mes)</p>
-                <p class="text-2xl font-bold text-gray-900 mt-2">
+          <div class="bg-white rounded-lg sm:rounded-xl shadow-sm border border-gray-200 p-4 sm:p-6">
+            <div class="flex items-center justify-between gap-2">
+              <div class="flex-1 min-w-0">
+                <p class="text-xs sm:text-sm font-medium text-gray-600">Aportes (Mes)</p>
+                <p class="text-lg sm:text-2xl font-bold text-gray-900 mt-1 sm:mt-2 truncate">
                   {dashboardData.monthly.contributions.toLocaleString('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0 })}
                 </p>
-                <p class="text-xs text-gray-500 mt-1">Este mes</p>
+                <p class="text-xs text-gray-500 mt-0.5 sm:mt-1">Este mes</p>
               </div>
-              <div class="p-3 bg-green-100 rounded-lg">
-                <svg class="w-8 h-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <div class="p-2 sm:p-3 bg-green-100 rounded-lg shrink-0">
+                <svg class="w-6 h-6 sm:w-8 sm:h-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 11l5-5m0 0l5 5m-5-5v12"/>
                 </svg>
               </div>
@@ -135,17 +139,17 @@ const { netReturn, returnPercentage } = calculateReturns(
           </div>
 
           <!-- This Month Withdrawals -->
-          <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-            <div class="flex items-center justify-between">
-              <div>
-                <p class="text-sm font-medium text-gray-600">Retiros (Mes)</p>
-                <p class="text-2xl font-bold text-gray-900 mt-2">
+          <div class="bg-white rounded-lg sm:rounded-xl shadow-sm border border-gray-200 p-4 sm:p-6">
+            <div class="flex items-center justify-between gap-2">
+              <div class="flex-1 min-w-0">
+                <p class="text-xs sm:text-sm font-medium text-gray-600">Retiros (Mes)</p>
+                <p class="text-lg sm:text-2xl font-bold text-gray-900 mt-1 sm:mt-2 truncate">
                   {dashboardData.monthly.withdrawals.toLocaleString('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0 })}
                 </p>
-                <p class="text-xs text-gray-500 mt-1">Este mes</p>
+                <p class="text-xs text-gray-500 mt-0.5 sm:mt-1">Este mes</p>
               </div>
-              <div class="p-3 bg-red-100 rounded-lg">
-                <svg class="w-8 h-8 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <div class="p-2 sm:p-3 bg-red-100 rounded-lg shrink-0">
+                <svg class="w-6 h-6 sm:w-8 sm:h-8 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 13l-5 5m0 0l-5-5m5 5V6"/>
                 </svg>
               </div>
@@ -153,60 +157,61 @@ const { netReturn, returnPercentage } = calculateReturns(
           </div>
         </div>
 
-        <!-- Two Column Layout -->
-        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <!-- Two Column Layout - Responsive -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
+          
           <!-- Accounts List -->
-          <div class="lg:col-span-2 bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-            <div class="flex items-center justify-between mb-6">
-              <h3 class="text-lg font-bold text-gray-900">Mis Inversiones</h3>
-              <span class="text-sm text-gray-500">{dashboardData.accounts.length} cuentas principales</span>
+          <div class="lg:col-span-2 bg-white rounded-lg sm:rounded-xl shadow-sm border border-gray-200 p-4 sm:p-6">
+            <div class="flex items-center justify-between mb-4 sm:mb-6">
+              <h3 class="text-base sm:text-lg font-bold text-gray-900">Mis Inversiones</h3>
+              <span class="text-xs sm:text-sm text-gray-500">{dashboardData.accounts.length} cuentas</span>
             </div>
-            <div class="space-y-4">
+            <div class="space-y-3 sm:space-y-4">
               {dashboardData.accounts.map((acc) => (
                 <div>
                   {/* Cuenta Principal */}
-                  <div class="flex items-center justify-between p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition">
-                    <div class="flex items-center gap-4">
-                      <div class="p-3 bg-blue-100 rounded-lg">
-                        <svg class="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <div class="flex items-center justify-between p-3 sm:p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition gap-2">
+                    <div class="flex items-center gap-2 sm:gap-4 flex-1 min-w-0">
+                      <div class="p-2 sm:p-3 bg-blue-100 rounded-lg shrink-0">
+                        <svg class="w-4 h-4 sm:w-5 sm:h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/>
                         </svg>
                       </div>
-                      <div>
-                        <p class="font-semibold text-gray-900">{acc.name}</p>
+                      <div class="flex-1 min-w-0">
+                        <p class="font-semibold text-gray-900 text-sm sm:text-base truncate">{acc.name}</p>
                         <p class="text-xs text-gray-500 uppercase">{acc.type} · {acc.currency}</p>
                       </div>
                     </div>
-                    <div class="text-right">
-                      <p class="font-bold text-gray-900">
-                        {acc.total_with_subs.toLocaleString("es-CO")}
+                    <div class="text-right shrink-0">
+                      <p class="font-bold text-gray-900 text-sm sm:text-base">
+                        {acc.total_with_subs.toLocaleString("es-CO", { maximumFractionDigits: 0 })}
                       </p>
                       <p class="text-xs text-gray-500">{acc.currency}</p>
                       {acc.subaccounts.length > 0 && (
-                        <p class="text-xs text-blue-600 mt-1">{acc.subaccounts.length} subcuentas</p>
+                        <p class="text-xs text-blue-600 mt-0.5 sm:mt-1">{acc.subaccounts.length} sub</p>
                       )}
                     </div>
                   </div>
                   
                   {/* Subcuentas */}
                   {acc.subaccounts.length > 0 && (
-                    <div class="ml-12 mt-2 space-y-2">
+                    <div class="ml-6 sm:ml-12 mt-2 space-y-2">
                       {acc.subaccounts.map((sub) => (
-                        <div class="flex items-center justify-between p-3 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition">
-                          <div class="flex items-center gap-3">
-                            <div class="p-2 bg-gray-100 rounded">
-                              <svg class="w-4 h-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <div class="flex items-center justify-between p-2 sm:p-3 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition gap-2">
+                          <div class="flex items-center gap-2 sm:gap-3 flex-1 min-w-0">
+                            <div class="p-1.5 sm:p-2 bg-gray-100 rounded shrink-0">
+                              <svg class="w-3 h-3 sm:w-4 sm:h-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
                               </svg>
                             </div>
-                            <div>
-                              <p class="font-medium text-gray-900 text-sm">{sub.name}</p>
+                            <div class="flex-1 min-w-0">
+                              <p class="font-medium text-gray-900 text-xs sm:text-sm truncate">{sub.name}</p>
                               <p class="text-xs text-gray-500">{sub.type}</p>
                             </div>
                           </div>
-                          <div class="text-right">
-                            <p class="font-semibold text-gray-900 text-sm">
-                              {parseFloat(String(sub.latest_value)).toLocaleString("es-CO")}
+                          <div class="text-right shrink-0">
+                            <p class="font-semibold text-gray-900 text-xs sm:text-sm">
+                              {parseFloat(String(sub.latest_value)).toLocaleString("es-CO", { maximumFractionDigits: 0 })}
                             </p>
                             <p class="text-xs text-gray-500">{sub.currency}</p>
                           </div>
@@ -220,20 +225,20 @@ const { netReturn, returnPercentage } = calculateReturns(
           </div>
 
           <!-- Distribution by Currency -->
-          <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-            <h3 class="text-lg font-bold text-gray-900 mb-6">Por Moneda</h3>
-            <div class="space-y-4">
+          <div class="bg-white rounded-lg sm:rounded-xl shadow-sm border border-gray-200 p-4 sm:p-6">
+            <h3 class="text-base sm:text-lg font-bold text-gray-900 mb-4 sm:mb-6">Por Moneda</h3>
+            <div class="space-y-3 sm:space-y-4">
               {dashboardData.currencyDistribution.map(dist => {
                 const percentage = ((parseFloat(String(dist.total_value_cop)) / totalPortfolio) * 100).toFixed(2);
                 return (
                   <div>
-                    <div class="flex items-center justify-between mb-2">
-                      <span class="text-sm font-medium text-gray-700">{dist.currency}</span>
-                      <span class="text-sm font-semibold text-gray-900">{percentage}%</span>
+                    <div class="flex items-center justify-between mb-1.5 sm:mb-2">
+                      <span class="text-xs sm:text-sm font-medium text-gray-700">{dist.currency}</span>
+                      <span class="text-xs sm:text-sm font-semibold text-gray-900">{percentage}%</span>
                     </div>
-                    <div class="w-full bg-gray-200 rounded-full h-2">
+                    <div class="w-full bg-gray-200 rounded-full h-1.5 sm:h-2">
                       <div 
-                        class="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                        class="bg-blue-600 h-1.5 sm:h-2 rounded-full transition-all duration-300"
                         style={`width: ${percentage}%`}
                       ></div>
                     </div>
@@ -245,37 +250,37 @@ const { netReturn, returnPercentage } = calculateReturns(
         </div>
 
         <!-- Recent Movements -->
-        <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-          <div class="flex items-center justify-between">
-            <h3 class="text-lg font-bold text-gray-900 mb-6">Últimos 5 Movimientos</h3>
-            <a href="/admin/history" class="text-sm text-blue-600 hover:underline mb-4 inline-block">Ver todo el historial</a>
+        <div class="bg-white rounded-lg sm:rounded-xl shadow-sm border border-gray-200 p-4 sm:p-6">
+          <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-4 sm:mb-6">
+            <h3 class="text-base sm:text-lg font-bold text-gray-900">Últimos 5 Movimientos</h3>
+            <a href="/admin/history" class="text-xs sm:text-sm text-blue-600 hover:underline">Ver todo el historial</a>
           </div>
-          <div class="space-y-3">
+          <div class="space-y-2 sm:space-y-3">
             {dashboardData.movements.slice(0, 5).map(m => (
-              <div class="flex items-center justify-between p-4 border-b border-gray-100 last:border-0">
-                <div class="flex items-center gap-4">
-                  <div class={`p-2 rounded-lg ${m.type === 'withdrawal' ? 'bg-red-100' : 'bg-green-100'}`}>
+              <div class="flex items-center justify-between p-3 sm:p-4 border-b border-gray-100 last:border-0 gap-2">
+                <div class="flex items-center gap-2 sm:gap-4 flex-1 min-w-0">
+                  <div class={`p-1.5 sm:p-2 rounded-lg shrink-0 ${m.type === 'withdrawal' ? 'bg-red-100' : 'bg-green-100'}`}>
                     {m.type === 'withdrawal' ? (
-                      <svg class="w-5 h-5 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <svg class="w-4 h-4 sm:w-5 sm:h-5 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 13l-5 5m0 0l-5-5m5 5V6"/>
                       </svg>
                     ) : (
-                      <svg class="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <svg class="w-4 h-4 sm:w-5 sm:h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 11l5-5m0 0l5 5m-5-5v12"/>
                       </svg>
                     )}
                   </div>
-                  <div>
-                    <p class="font-medium text-gray-900 capitalize">{m.type === 'withdrawal' ? 'Retiro' : 'Aporte'}</p>
-                    <p class="text-xs text-gray-500">
-                      {new Date(m.date).toLocaleDateString('es-CO', { dateStyle: 'medium' })}
+                  <div class="flex-1 min-w-0">
+                    <p class="font-medium text-gray-900 capitalize text-xs sm:text-sm">{m.type === 'withdrawal' ? 'Retiro' : 'Aporte'}</p>
+                    <p class="text-xs text-gray-500 truncate">
+                      {new Date(m.date).toLocaleDateString('es-CO', { dateStyle: 'short' })}
                       {m.note && ` · ${m.note}`}
                     </p>
                   </div>
                 </div>
-                <p class={`font-bold ${m.type === 'withdrawal' ? 'text-red-600' : 'text-green-600'}`}>
+                <p class={`font-bold text-xs sm:text-sm shrink-0 ${m.type === 'withdrawal' ? 'text-red-600' : 'text-green-600'}`}>
                   {m.type === 'withdrawal' ? '-' : '+'}
-                  {parseFloat(String(m.amount)).toLocaleString("es-CO")} {m.currency}
+                  {parseFloat(String(m.amount)).toLocaleString("es-CO", { maximumFractionDigits: 0 })} {m.currency}
                 </p>
               </div>
             ))}
