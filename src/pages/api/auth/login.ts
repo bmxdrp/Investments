@@ -45,7 +45,7 @@ export const POST: APIRoute = async ({ request }) => {
 
     // Crear sesión
     const sessionId = randomUUID();
-    const expiresAt = new Date(Date.now() + 1000 * 60 * 60 * 24 * 7);
+   const expiresAt = new Date(Date.now() + 1000 * 60 * 30); // 30 minutos
 
     await sql`
       INSERT INTO sessions (id, user_id, expires_at)
@@ -56,7 +56,7 @@ export const POST: APIRoute = async ({ request }) => {
     const headers = new Headers({
       "Set-Cookie":
         `session=${sessionId}; Path=/; HttpOnly; Secure; SameSite=Strict; Expires=${expiresAt.toUTCString()}`,
-      "Location": "/admin",
+      "Location": returnTo,
     });
 
     return new Response(null, { status: 302, headers });

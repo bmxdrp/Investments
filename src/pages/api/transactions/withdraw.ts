@@ -46,7 +46,7 @@ export const POST: APIRoute = async ({ request }) => {
 
     // 2. Insertar retiro en la tabla withdraws
     await sql`
-      INSERT INTO withdraws (account_id, date, amount, currency, note)
+      INSERT INTO withdrawals (account_id, date, amount, currency, note)
       VALUES (${accountId}, ${date}, ${amount}, ${currency}, ${note});
     `;
 
@@ -70,7 +70,7 @@ export const POST: APIRoute = async ({ request }) => {
     if (newValue < 0) {
       // Revertir la inserción del retiro
       await sql`
-        DELETE FROM withdraws
+        DELETE FROM withdrawals
         WHERE account_id = ${accountId} 
           AND date = ${date} 
           AND amount = ${amount}

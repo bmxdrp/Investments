@@ -3,7 +3,9 @@ import { neon } from "@neondatabase/serverless";
 
 const sql = neon(import.meta.env.DATABASE_URL);
 
-const PROTECTED_ROUTES = ["/admin"];
+const PROTECTED_ROUTES = ["/admin", "/api"];
+const UNPROTECTED_ROUTES = ["/api/fetch/usd_to_cop"];
+
 
 export const onRequest = defineMiddleware(async (ctx, next) => {
   const { request, locals, url } = ctx;
@@ -32,13 +34,12 @@ export const onRequest = defineMiddleware(async (ctx, next) => {
 
   const path = url.pathname;
 
-  if (PROTECTED_ROUTES.some((p) => path.startsWith(p))) {
+  if (PROTECTED_ROUTES.some((p) => path.startsWith(p)) && !UNPROTECTED_ROUTES.includes(path)) {
     if (!locals.userId) {
       const encoded = encodeURIComponent(path);
       const redirectUrl = new URL(`/auth/login?returnTo=${encoded}`, url);
       return Response.redirect(redirectUrl.toString(), 302);
     }
   }
-
   return next();
 });

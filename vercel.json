@@ -1,0 +1,8 @@
+{
+  "cron": [
+    {
+      "path": "/api/fetch/usd_to_cop",
+      "schedule": "0 23 * * *"
+    }
+  ]
+}
