@@ -66,3 +66,7 @@ export const POST: APIRoute = async ({ request }) => {
     return Response.redirect(new URL("/auth/login?error=" + encodeURIComponent("error de servidor"), request.url), 303);
   }
 };
+export const GET: APIRoute = ({ url }) => {
+  const returnTo = url.searchParams.get("returnTo") || "/";
+  return Response.redirect(`/auth/login?returnTo=${encodeURIComponent(returnTo)}`, 302);
+};
