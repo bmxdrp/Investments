@@ -66,5 +66,20 @@ export const GET: APIRoute = async () => {
     );
   `;
 
+  await sql`
+    CREATE TABLE IF NOT EXISTS account_value_history (
+      id SERIAL PRIMARY KEY,
+      account_id INT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+      date DATE NOT NULL,
+      value NUMERIC(18,2) NOT NULL,
+      value_cop NUMERIC(18,2) NOT NULL,
+      currency TEXT NOT NULL CHECK (currency IN ('COP','USD')),
+      usd_to_cop_rate NUMERIC(18,4) NOT NULL,
+      created_at TIMESTAMP DEFAULT (NOW() AT TIME ZONE 'America/Bogota'),
+      updated_at TIMESTAMP DEFAULT (NOW() AT TIME ZONE 'America/Bogota'),
+      UNIQUE(account_id, date)
+    );
+  `;
+
   return new Response("OK – Database initialized.");
 };
