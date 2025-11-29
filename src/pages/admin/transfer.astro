@@ -1,0 +1,438 @@
+---
+import Layout from "@layouts/default.astro";
+import { sql } from "@lib/db";
+import { getLatestExchangeRate } from "@lib/finance";
+
+const userId = Astro.locals.userId;
+if (!userId) {
+    return Astro.redirect("/auth/login?returnTo=/dashboard/transfer");
+}
+
+// Obtener cuentas con saldo actual
+const accounts = await sql`
+  SELECT 
+    a.id, 
+    a.name, 
+    a.currency, 
+    a.type,
+    COALESCE(
+      (SELECT new_value FROM transactions t 
+       WHERE t.account_id = a.id 
+       ORDER BY t.date DESC, t.created_at DESC, t.id DESC LIMIT 1), 
+      0
+    ) as balance
+  FROM accounts a
+  WHERE a.user_id = ${userId}
+  ORDER BY a.name ASC
+`;
+
+const latestRate = await getLatestExchangeRate();
+const currentRate = latestRate?.usd_to_cop || 0;
+
+const today = new Date()
+    .toLocaleDateString("es-CO", {
+        timeZone: "America/Bogota",
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+    })
+    .split("/")
+    .reverse()
+    .join("-");
+---
+
+<Layout title="Transferir Fondos" activePage="transfer">
+    <div class="max-w-2xl mx-auto">
+        <div class="mb-8">
+            <h1 class="text-3xl font-bold text-gray-900">Transferir Fondos</h1>
+            <p class="text-gray-600 mt-2">
+                Mueve dinero entre tus cuentas de inversión
+            </p>
+        </div>
+
+        {
+            Astro.url.searchParams.get("success") && (
+                <div class="mb-6 bg-green-50 border border-green-200 text-green-800 px-4 py-3 rounded-lg flex items-center gap-2">
+                    <svg
+                        class="w-5 h-5"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                    >
+                        <path
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            stroke-width="2"
+                            d="M5 13l4 4L19 7"
+                        />
+                    </svg>
+                    Transferencia realizada exitosamente
+                </div>
+            )
+        }
+
+        {
+            Astro.url.searchParams.get("error") && (
+                <div class="mb-6 bg-red-50 border border-red-200 text-red-800 px-4 py-3 rounded-lg flex items-center gap-2">
+                    <svg
+                        class="w-5 h-5"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                    >
+                        <path
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            stroke-width="2"
+                            d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                        />
+                    </svg>
+                    {decodeURIComponent(
+                        Astro.url.searchParams.get("error") ||
+                            "Error desconocido",
+                    )}
+                </div>
+            )
+        }
+
+        <div
+            class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden"
+        >
+            <form
+                action="/api/transactions/transfer"
+                method="POST"
+                class="p-6 space-y-6"
+                id="transferForm"
+            >
+                <!-- Cuentas -->
+                <div
+                    class="grid grid-cols-1 md:grid-cols-[1fr_auto_1fr] gap-3 md:gap-6 items-end"
+                >
+                    <!-- Origen -->
+                    <div class="order-1">
+                        <label
+                            class="block text-sm font-medium text-gray-700 mb-2"
+                        >
+                            Desde (Origen)
+                        </label>
+                        <select
+                            name="from_account_id"
+                            id="fromAccount"
+                            required
+                            class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-gray-50"
+                        >
+                            <option value="">Seleccionar cuenta...</option>
+                            {
+                                accounts.map((acc) => (
+                                    <option
+                                        value={acc.id}
+                                        data-currency={acc.currency}
+                                        data-balance={acc.balance}
+                                    >
+                                        {acc.name} (
+                                        {Number(acc.balance).toLocaleString()}{" "}
+                                        {acc.currency})
+                                    </option>
+                                ))
+                            }
+                        </select>
+                    </div>
+
+                    <!-- Botón Swap (centro en mobile y desktop) -->
+                    <div class="order-2 flex justify-center">
+                        <button
+                            type="button"
+                            id="swapAccountsBtn"
+                            class="w-9 h-9 bg-gray-100 hover:bg-blue-50 text-gray-500 hover:text-blue-600 rounded-full flex items-center justify-center border border-gray-200 transition-colors shadow-sm"
+                            title="Intercambiar cuentas"
+                        >
+                            <svg
+                                class="w-4 h-4"
+                                fill="none"
+                                stroke="currentColor"
+                                viewBox="0 0 24 24"
+                            >
+                                <path
+                                    stroke-linecap="round"
+                                    stroke-linejoin="round"
+                                    stroke-width="2"
+                                    d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"
+                                ></path>
+                            </svg>
+                        </button>
+                    </div>
+
+                    <!-- Destino -->
+                    <div class="order-3">
+                        <label
+                            class="block text-sm font-medium text-gray-700 mb-2"
+                        >
+                            Para (Destino)
+                        </label>
+                        <select
+                            name="to_account_id"
+                            id="toAccount"
+                            required
+                            class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-gray-50"
+                        >
+                            <option value="">Seleccionar cuenta...</option>
+                            {
+                                accounts.map((acc) => (
+                                    <option
+                                        value={acc.id}
+                                        data-currency={acc.currency}
+                                    >
+                                        {acc.name} ({acc.currency})
+                                    </option>
+                                ))
+                            }
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Monto -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2"
+                        >Monto a Transferir</label
+                    >
+                    <div class="relative rounded-md shadow-sm">
+                        <div
+                            class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none"
+                        >
+                            <span class="text-gray-500 sm:text-sm">$</span>
+                        </div>
+                        <input
+                            type="number"
+                            name="amount"
+                            id="amount"
+                            step="0.01"
+                            min="0.01"
+                            required
+                            class="focus:ring-blue-500 focus:border-blue-500 block w-full pl-7 pr-12 sm:text-sm border-gray-300 rounded-lg py-3"
+                            placeholder="0.00"
+                        />
+                        <div
+                            class="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none"
+                        >
+                            <span
+                                class="text-gray-500 sm:text-sm"
+                                id="currencyLabel">COP</span
+                            >
+                        </div>
+                    </div>
+                    <p class="mt-1 text-xs text-gray-500" id="balanceInfo">
+                        Selecciona una cuenta de origen
+                    </p>
+                </div>
+
+                <!-- Info de Conversión (Oculto por defecto) -->
+                <div
+                    id="conversionInfo"
+                    class="hidden bg-blue-50 rounded-lg p-4 border border-blue-100"
+                >
+                    <div class="flex items-start gap-3">
+                        <svg
+                            class="w-5 h-5 text-blue-600 mt-0.5"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                        >
+                            <path
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                                stroke-width="2"
+                                d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                            ></path>
+                        </svg>
+                        <div>
+                            <h4 class="text-sm font-medium text-blue-900">
+                                Conversión de Divisa
+                            </h4>
+                            <p class="text-sm text-blue-700 mt-1">
+                                Tasa estimada: 1 USD = {
+                                    currentRate.toLocaleString("es-CO")
+                                } COP
+                            </p>
+                            <p
+                                class="text-sm font-bold text-blue-800 mt-2"
+                                id="estimatedResult"
+                            >
+                                Recibirás aproximadamente: ...
+                            </p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Detalles -->
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                        <label
+                            class="block text-sm font-medium text-gray-700 mb-2"
+                            >Fecha</label
+                        >
+                        <input
+                            type="date"
+                            name="date"
+                            value={today}
+                            required
+                            class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        />
+                    </div>
+                    <div>
+                        <label
+                            class="block text-sm font-medium text-gray-700 mb-2"
+                            >Nota (Opcional)</label
+                        >
+                        <input
+                            type="text"
+                            name="note"
+                            placeholder="Ej: Rebalanceo mensual"
+                            class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        />
+                    </div>
+                </div>
+
+                <!-- Botones -->
+                <div
+                    class="pt-4 flex items-center justify-end gap-3 border-t border-gray-100"
+                >
+                    <a
+                        href="/admin"
+                        class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50"
+                    >
+                        Cancelar
+                    </a>
+                    <button
+                        type="submit"
+                        class="px-6 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 flex items-center gap-2"
+                    >
+                        <svg
+                            class="w-4 h-4"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                        >
+                            <path
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                                stroke-width="2"
+                                d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"
+                            ></path>
+                        </svg>
+                        Realizar Transferencia
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script define:vars={{ currentRate }}>
+        const fromSelect = document.getElementById("fromAccount");
+        const toSelect = document.getElementById("toAccount");
+        const amountInput = document.getElementById("amount");
+        const currencyLabel = document.getElementById("currencyLabel");
+        const balanceInfo = document.getElementById("balanceInfo");
+        const conversionInfo = document.getElementById("conversionInfo");
+        const estimatedResult = document.getElementById("estimatedResult");
+        const swapBtn = document.getElementById("swapAccountsBtn");
+
+        // Función para actualizar opciones disponibles
+        function updateOptions() {
+            const fromVal = fromSelect.value;
+            const toVal = toSelect.value;
+
+            // Actualizar opciones de Destino
+            Array.from(toSelect.options).forEach((opt) => {
+                if (opt.value === "") return;
+                if (opt.value === fromVal) {
+                    opt.disabled = true;
+                    opt.hidden = true;
+                } else {
+                    opt.disabled = false;
+                    opt.hidden = false;
+                }
+            });
+
+            // Actualizar opciones de Origen
+            Array.from(fromSelect.options).forEach((opt) => {
+                if (opt.value === "") return;
+                if (opt.value === toVal) {
+                    opt.disabled = true;
+                    opt.hidden = true;
+                } else {
+                    opt.disabled = false;
+                    opt.hidden = false;
+                }
+            });
+        }
+
+        function updateUI() {
+            const fromOption = fromSelect.selectedOptions[0];
+            const toOption = toSelect.selectedOptions[0];
+
+            if (!fromOption || !fromOption.value) {
+                currencyLabel.textContent = "---";
+                balanceInfo.textContent = "Selecciona una cuenta de origen";
+            } else {
+                const fromCurrency = fromOption.dataset.currency;
+                const balance = parseFloat(fromOption.dataset.balance);
+
+                currencyLabel.textContent = fromCurrency;
+                balanceInfo.textContent = `Disponible: ${balance.toLocaleString()} ${fromCurrency}`;
+
+                // Lógica de conversión
+                if (
+                    toOption &&
+                    toOption.value &&
+                    fromCurrency !== toOption.dataset.currency
+                ) {
+                    const amount = parseFloat(amountInput.value) || 0;
+                    const toCurrency = toOption.dataset.currency;
+                    let result = 0;
+
+                    if (fromCurrency === "USD" && toCurrency === "COP") {
+                        result = amount * currentRate;
+                    } else if (fromCurrency === "COP" && toCurrency === "USD") {
+                        result = amount / currentRate;
+                    }
+
+                    estimatedResult.textContent = `Recibirás aproximadamente: ${result.toLocaleString(undefined, { maximumFractionDigits: 2 })} ${toCurrency}`;
+                    conversionInfo.classList.remove("hidden");
+                } else {
+                    conversionInfo.classList.add("hidden");
+                }
+            }
+
+            updateOptions();
+        }
+
+        // Evento de Intercambio
+        swapBtn.addEventListener("click", () => {
+            const tempVal = fromSelect.value;
+            fromSelect.value = toSelect.value;
+
+            // Necesitamos habilitar temporalmente la opción en el destino para poder seleccionarla
+            const targetOption = toSelect.querySelector(
+                `option[value="\${tempVal}"]`,
+            );
+            if (targetOption) {
+                targetOption.disabled = false;
+                targetOption.hidden = false;
+            }
+            toSelect.value = tempVal;
+
+            updateUI();
+
+            // Animación visual
+            swapBtn.classList.add("rotate-180");
+            setTimeout(() => swapBtn.classList.remove("rotate-180"), 300);
+        });
+
+        fromSelect.addEventListener("change", updateUI);
+        toSelect.addEventListener("change", updateUI);
+        amountInput.addEventListener("input", updateUI);
+
+        // Inicializar estado
+        updateOptions();
+    </script>
+</Layout>

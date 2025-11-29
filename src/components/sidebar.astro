@@ -1,0 +1,447 @@
+---
+// Sidebar.astro
+interface Props {
+  activePage: string;
+}
+
+const { activePage } = Astro.props;
+
+const menuItems = [
+  { name: "Dashboard", href: "/admin", icon: "dashboard", page: "dashboard" },
+  {
+    name: "Cuentas",
+    href: "/admin/accounts",
+    icon: "accounts",
+    page: "accounts",
+  },
+  {
+    name: "Aportes",
+    href: "/admin/contribute",
+    icon: "contribute",
+    page: "contribute",
+  },
+  {
+    name: "Retiros",
+    href: "/admin/withdraw",
+    icon: "withdraw",
+    page: "withdraw",
+  },
+  {
+    name: "Transferencias",
+    href: "/admin/transfer",
+    icon: "transfer",
+    page: "transfer",
+  },
+  {
+    name: "Ganancias",
+    href: "/admin/activity",
+    icon: "activity",
+    page: "activity",
+  },
+  {
+    name: "Tasa de cambio",
+    href: "/admin/exchange",
+    icon: "exchange",
+    page: "exchange",
+  },
+  {
+    name: "Historial",
+    href: "/admin/history",
+    icon: "history",
+    page: "history",
+  },
+  {
+    name: "Gráficos",
+    href: "/admin/portfolio-history",
+    icon: "chart",
+    page: "portfolio-history",
+  },
+  {
+    name: "Estadísticas",
+    href: "/admin/statistics",
+    icon: "stats",
+    page: "statistics",
+  },
+];
+---
+
+<!-- Mobile Menu Button (visible solo en móvil) -->
+<button
+  id="mobile-menu-button"
+  type="button"
+  class="fixed top-4 left-4 z-50 lg:hidden p-2 rounded-lg bg-white shadow-lg border border-gray-200 hover:bg-gray-50 transition-colors"
+  aria-label="Toggle menu"
+>
+  <svg
+    id="menu-open-icon"
+    class="w-6 h-6 text-gray-700"
+    fill="none"
+    stroke="currentColor"
+    viewBox="0 0 24 24"
+  >
+    <path
+      stroke-linecap="round"
+      stroke-linejoin="round"
+      stroke-width="2"
+      d="M4 6h16M4 12h16M4 18h16"></path>
+  </svg>
+  <svg
+    id="menu-close-icon"
+    class="w-6 h-6 text-gray-700 hidden"
+    fill="none"
+    stroke="currentColor"
+    viewBox="0 0 24 24"
+  >
+    <path
+      stroke-linecap="round"
+      stroke-linejoin="round"
+      stroke-width="2"
+      d="M6 18L18 6M6 6l12 12"></path>
+  </svg>
+</button>
+
+<!-- Overlay (para cerrar el menú al hacer click fuera) -->
+<div
+  id="sidebar-overlay"
+  class="fixed inset-0 bg-black bg-opacity-50 z-30 lg:hidden hidden transition-opacity"
+>
+</div>
+
+<!-- Sidebar -->
+<section
+  id="sidebar"
+  class="fixed top-0 left-0 z-40 h-screen w-64 bg-white border-r border-gray-200 transform -translate-x-full lg:translate-x-0 transition-transform duration-300 ease-in-out"
+>
+  <div class="flex flex-col h-full">
+    <!-- Logo/Header -->
+    <div class="flex items-center justify-between p-6 border-b border-gray-200">
+      <div class="flex items-center gap-3">
+        <div
+          class="w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center"
+        >
+          <svg
+            class="w-6 h-6 text-white"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"></path>
+          </svg>
+        </div>
+        <div>
+          <h2 class="text-lg font-bold text-gray-900">Capyte</h2>
+          <p class="text-xs text-gray-500">Admin Panel</p>
+        </div>
+      </div>
+      <!-- Botón cerrar (solo móvil) -->
+      <button
+        id="sidebar-close-button"
+        class="lg:hidden p-1 rounded hover:bg-gray-100"
+        aria-label="Cerrar menú"
+      >
+        <svg
+          class="w-5 h-5 text-gray-500"
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+        >
+          <path
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            d="M6 18L18 6M6 6l12 12"></path>
+        </svg>
+      </button>
+    </div>
+
+    <!-- Navigation -->
+    <nav class="flex-1 overflow-y-auto p-3">
+      <ul class="space-y-0.5">
+        {
+          menuItems.map((item) => (
+            <li>
+              <a
+                href={item.href}
+                class={`flex items-center gap-2 px-4 py-2.5 rounded-lg transition-colors ${
+                  activePage === item.page
+                    ? "bg-blue-50 text-blue-600 font-medium"
+                    : "text-gray-700 hover:bg-gray-50"
+                }`}
+              >
+                {item.icon === "dashboard" && (
+                  <svg
+                    class="w-5 h-5"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                      d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"
+                    />
+                  </svg>
+                )}
+                {item.icon === "accounts" && (
+                  <svg
+                    class="w-5 h-5"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                      d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"
+                    />
+                  </svg>
+                )}
+                {item.icon === "contribute" && (
+                  <svg
+                    class="w-5 h-5"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                      d="M7 11l5-5m0 0l5 5m-5-5v12"
+                    />
+                  </svg>
+                )}
+                {item.icon === "withdraw" && (
+                  <svg
+                    class="w-5 h-5"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                      d="M17 13l-5 5m0 0l-5-5m5 5V6"
+                    />
+                  </svg>
+                )}
+                {item.icon === "transfer" && (
+                  <svg
+                    class="w-5 h-5"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                      d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"
+                    />
+                  </svg>
+                )}
+                {item.icon === "history" && (
+                  <svg
+                    class="w-5 h-5"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                      d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
+                    />
+                  </svg>
+                )}
+                {item.icon === "activity" && (
+                  <svg
+                    class="w-5 h-5"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                      d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"
+                    />
+                  </svg>
+                )}
+                {item.icon === "exchange" && (
+                  <svg
+                    class="w-5 h-5"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                      d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
+                    />
+                  </svg>
+                )}
+                {item.icon === "chart" && (
+                  <svg
+                    class="w-5 h-5"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                      d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z"
+                    />
+                  </svg>
+                )}
+                {item.icon === "stats" && (
+                  <svg
+                    class="w-5 h-5"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                      d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"
+                    />
+                  </svg>
+                )}
+                <span>{item.name}</span>
+              </a>
+            </li>
+          ))
+        }
+      </ul>
+    </nav>
+
+    <!-- User Section -->
+    <div class="p-4 border-t border-gray-200">
+      <a
+        href="/logout"
+        class="flex items-center gap-3 px-4 py-3 text-gray-700 hover:bg-gray-50 rounded-lg transition-colors"
+      >
+        <svg
+          class="w-5 h-5"
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+        >
+          <path
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"
+          ></path>
+        </svg>
+        <span>Cerrar Sesión</span>
+      </a>
+    </div>
+  </div>
+</section>
+
+<script>
+  // Elementos del DOM
+  const sidebar = document.getElementById("sidebar");
+  const overlay = document.getElementById("sidebar-overlay");
+  const menuButton = document.getElementById("mobile-menu-button");
+  const closeButton = document.getElementById("sidebar-close-button");
+  const menuOpenIcon = document.getElementById("menu-open-icon");
+  const menuCloseIcon = document.getElementById("menu-close-icon");
+
+  // Función para abrir el sidebar
+  function openSidebar() {
+    sidebar?.classList.remove("-translate-x-full");
+    overlay?.classList.remove("hidden");
+    menuOpenIcon?.classList.add("hidden");
+    menuButton?.classList.add("hidden");
+    document.body.style.overflow = "hidden"; // Prevenir scroll del body
+  }
+
+  // Función para cerrar el sidebar
+  function closeSidebar() {
+    sidebar?.classList.add("-translate-x-full");
+    overlay?.classList.add("hidden");
+    menuOpenIcon?.classList.remove("hidden");
+    menuButton?.classList.remove("hidden");
+    menuCloseIcon?.classList.add("hidden");
+    document.body.style.overflow = ""; // Restaurar scroll
+  }
+
+  // Toggle del sidebar
+  menuButton?.addEventListener("click", () => {
+    if (sidebar?.classList.contains("-translate-x-full")) {
+      openSidebar();
+    } else {
+      closeSidebar();
+    }
+  });
+
+  // Cerrar con el botón X
+  closeButton?.addEventListener("click", closeSidebar);
+
+  // Cerrar al hacer click en el overlay
+  overlay?.addEventListener("click", closeSidebar);
+
+  // Cerrar al hacer click en un link (solo en móvil)
+  const sidebarLinks = sidebar?.querySelectorAll("a");
+  sidebarLinks?.forEach((link) => {
+    link.addEventListener("click", () => {
+      if (window.innerWidth < 768) {
+        closeSidebar();
+      }
+    });
+  });
+
+  // Cerrar al presionar Escape
+  document.addEventListener("keydown", (e) => {
+    if (
+      e.key === "Escape" &&
+      !sidebar?.classList.contains("-translate-x-full")
+    ) {
+      closeSidebar();
+    }
+  });
+
+  // Ajustar al cambiar el tamaño de la ventana
+  window.addEventListener("resize", () => {
+    if (window.innerWidth >= 768) {
+      closeSidebar();
+    }
+  });
+</script>
+
+<style>
+  /* Prevenir scroll horizontal */
+  body {
+    overflow-x: hidden;
+  }
+
+  /* Asegurar que el overlay esté detrás del sidebar */
+  #sidebar-overlay {
+    z-index: 30;
+  }
+
+  #sidebar {
+    z-index: 40;
+  }
+
+  #mobile-menu-button {
+    z-index: 50;
+  }
+</style>

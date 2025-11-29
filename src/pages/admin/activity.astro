@@ -1,0 +1,313 @@
+---
+// src/pages/admin/activity.astro
+import Default from "@layouts/default.astro";
+import { sql } from "@lib/db";
+
+const userId = Astro.locals.userId;
+if (!userId) {
+  return Astro.redirect("/auth/login?returnTo=/dashboard/activity");
+}
+
+// Obtener tasa de cambio actual
+const latestRate = await sql`
+  SELECT usd_to_cop, date
+  FROM exchange_rates
+  ORDER BY date DESC
+  LIMIT 1
+`;
+const currentRate = latestRate.length > 0 ? Number(latestRate[0].usd_to_cop) : 1;
+
+// ✅ Obtener todas las cuentas con su último valor desde TRANSACTIONS
+const accountsWithValues = await sql`
+  SELECT 
+    a.id,
+    a.name,
+    a.type,
+    a.currency,
+    a.parent_account_id,
+
+    COALESCE(
+      (
+        SELECT t.new_value
+        FROM transactions t
+        WHERE t.account_id = a.id
+          AND t.type IN ('adjustment', 'initial_balance', 'gain', 'loss')
+          AND t.user_id = ${userId}
+        ORDER BY t.date DESC, t.created_at DESC
+        LIMIT 1
+      ),
+      0
+    ) AS current_value,
+
+    COALESCE(
+      (
+        SELECT t.date
+        FROM transactions t
+        WHERE t.account_id = a.id
+          AND t.type IN ('adjustment', 'initial_balance', 'gain', 'loss')
+        ORDER BY t.date DESC, t.created_at DESC
+        LIMIT 1
+      ),
+      CURRENT_DATE
+    ) AS last_update
+
+  FROM accounts a
+  WHERE a.user_id = ${userId}
+  ORDER BY 
+    COALESCE(a.parent_account_id, a.id) ASC,
+    CASE WHEN a.parent_account_id IS NULL THEN 0 ELSE 1 END ASC,
+    a.name ASC
+`;
+
+// Agrupar cuentas principales y subcuentas
+const accountsHierarchy = [];
+const accountsMap = new Map();
+
+for (const acc of accountsWithValues) {
+  if (!acc.parent_account_id) {
+    accountsMap.set(acc.id, { ...acc, subaccounts: [] });
+    accountsHierarchy.push(accountsMap.get(acc.id));
+  }
+}
+
+for (const acc of accountsWithValues) {
+  if (acc.parent_account_id) {
+    const parent = accountsMap.get(acc.parent_account_id);
+    if (parent) {
+      parent.subaccounts.push(acc);
+    }
+  }
+}
+
+// Calcular totales
+let totalCOP = 0;
+for (const acc of accountsWithValues) {
+  const value = Number(acc.current_value);
+  if (acc.currency === 'USD') {
+    totalCOP += value * currentRate;
+  } else {
+    totalCOP += value;
+  }
+}
+
+const todayColombia = new Date().toLocaleDateString("es-CO", {
+  timeZone: "America/Bogota",
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit"
+}).split("/").reverse().join("-"); // YYYY-MM-DD
+---
+
+<Default title="Actualizar Valores" activePage="activity">
+  <div class="max-w-7xl mx-auto space-y-6">
+    <!-- Header -->
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+      <div>
+        <h1 class="text-3xl font-bold text-gray-900">Actualizar Valores</h1>
+        <p class="text-gray-600 mt-1">
+          Ingresa manualmente los valores actuales de tus cuentas
+        </p>
+      </div>
+      <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+        <p class="text-sm text-gray-600">Valor Total del Portafolio</p>
+        <p class="text-2xl font-bold text-gray-900">
+          {totalCOP.toLocaleString('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0 })}
+        </p>
+        <p class="text-xs text-gray-500 mt-1">
+          Tasa USD: {currentRate.toLocaleString('es-CO')} COP
+        </p>
+      </div>
+    </div>
+
+    <!-- Mensaje de éxito/error -->
+    {Astro.url.searchParams.get('success') === '1' && (
+      <div class="bg-green-50 border border-green-200 text-green-800 px-4 py-3 rounded-lg">
+        ✅ Valor actualizado correctamente
+      </div>
+    )}
+    {Astro.url.searchParams.get('error') && (
+      <div class="bg-red-50 border border-red-200 text-red-800 px-4 py-3 rounded-lg">
+        ❌ {decodeURIComponent(Astro.url.searchParams.get('error') || "Error al actualizar")}
+      </div>
+    )}
+
+    <!-- Lista de Cuentas -->
+    <div class="space-y-4">
+      {accountsHierarchy.map((account) => (
+        <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+          <!-- Cuenta Principal -->
+          <div class="bg-gradient-to-r from-blue-50 to-blue-100 border-b border-blue-200 p-6">
+            <div class="flex items-center justify-between">
+              <div class="flex-1">
+                <h3 class="text-xl font-bold text-gray-900">{account.name}</h3>
+                <p class="text-sm text-gray-600 mt-1">
+                  {account.type} · {account.currency}
+                </p>
+              </div>
+              <div class="text-right">
+                <p class="text-2xl font-bold text-gray-900">
+                  {Number(account.current_value).toLocaleString('es-CO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </p>
+                <p class="text-sm text-gray-600">{account.currency}</p>
+                {account.currency === 'USD' && (
+                  <p class="text-xs text-gray-500 mt-1">
+                    ≈ {(Number(account.current_value) * currentRate).toLocaleString('es-CO', { minimumFractionDigits: 0 })} COP
+                  </p>
+                )}
+              </div>
+            </div>
+            
+            <!-- Formulario de actualización -->
+            <form 
+              method="POST" 
+              action="/api/portfolio-values" 
+              class="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-3"
+            >
+              <input type="hidden" name="account_id" value={account.id} />
+              <input type="hidden" name="user_id" value={userId} />
+              <input type="hidden" name="currency" value={account.currency} />
+              <input type="hidden" name="previous_value" value={account.current_value} />
+              <input type="hidden" name="usd_to_cop_rate" value={currentRate} />
+              
+              <div>
+                <label class="block text-xs font-medium text-gray-700 mb-1">
+                  Nuevo Valor ({account.currency})
+                </label>
+                <input
+                  type="number"
+                  name="value"
+                  step="0.01"
+                  required
+                  placeholder={Number(account.current_value).toString()}
+                  class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
+                />
+              </div>
+              
+              <div>
+                <label class="block text-xs font-medium text-gray-700 mb-1">
+                  Fecha
+                </label>
+                <input
+                  type="date"
+                  name="date"
+                  value={todayColombia}
+                  required
+                  class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
+                />
+              </div>
+              
+              <div class="flex items-end">
+                <button
+                  type="submit"
+                  class="w-full px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors font-medium text-sm"
+                >
+                  Actualizar
+                </button>
+              </div>
+            </form>
+            
+            <p class="text-xs text-gray-500 mt-2">
+              Última actualización: {new Date(account.last_update).toLocaleDateString('es-CO', { dateStyle: 'medium' })}
+            </p>
+          </div>
+
+          <!-- Subcuentas -->
+          {account.subaccounts.length > 0 && (
+            <div class="divide-y divide-gray-200">
+              {account.subaccounts.map((sub: any) => (
+                <div class="p-4 hover:bg-gray-50 transition">
+                  <div class="flex items-center justify-between mb-3">
+                    <div class="flex-1">
+                      <h4 class="font-semibold text-gray-900 flex items-center gap-2">
+                        <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+                        </svg>
+                        {sub.name}
+                      </h4>
+                      <p class="text-sm text-gray-600">{sub.type} · {sub.currency}</p>
+                    </div>
+                    <div class="text-right">
+                      <p class="text-lg font-bold text-gray-900">
+                        {Number(sub.current_value).toLocaleString('es-CO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </p>
+                      <p class="text-xs text-gray-600">{sub.currency}</p>
+                      {sub.currency === 'USD' && (
+                        <p class="text-xs text-gray-500">
+                          ≈ {(Number(sub.current_value) * currentRate).toLocaleString('es-CO', { minimumFractionDigits: 0 })} COP
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                  
+                  <!-- Formulario de actualización subcuenta -->
+                  <form 
+                    method="POST" 
+                    action="/api/portfolio-values" 
+                    class="grid grid-cols-1 sm:grid-cols-3 gap-3"
+                  >
+                    <input type="hidden" name="account_id" value={sub.id} />
+                    <input type="hidden" name="user_id" value={userId} />
+                    <input type="hidden" name="currency" value={sub.currency} />
+                    <input type="hidden" name="usd_to_cop_rate" value={currentRate} />
+                    <input type="hidden" name="previous_value" value={sub.current_value} />
+                    
+                    <div>
+                      <label class="block text-xs font-medium text-gray-700 mb-1">
+                        Nuevo Valor ({sub.currency})
+                      </label>
+                      <input
+                        type="number"
+                        name="value"
+                        step="0.01"
+                        required
+                        placeholder={Number(sub.current_value).toString()}
+                        class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
+                      />
+                    </div>
+                    
+                    <div>
+                      <label class="block text-xs font-medium text-gray-700 mb-1">
+                        Fecha
+                      </label>
+                      <input
+                        type="date"
+                        name="date"
+                        value={todayColombia}
+                        required
+                        class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
+                      />
+                    </div>
+                    
+                    <div class="flex items-end">
+                      <button
+                        type="submit"
+                        class="w-full px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 transition-colors font-medium text-sm"
+                      >
+                        Actualizar
+                      </button>
+                    </div>
+                  </form>
+                  
+                  <p class="text-xs text-gray-500 mt-2">
+                    Última actualización: {new Date(sub.last_update).toLocaleDateString('es-CO', { dateStyle: 'medium' })}
+                  </p>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      ))}
+    </div>
+
+    <!-- Instrucciones -->
+    <div class="bg-blue-50 border border-blue-200 rounded-lg p-6">
+      <h3 class="font-semibold text-blue-900 mb-2">💡 Instrucciones</h3>
+      <ul class="text-sm text-blue-800 space-y-1">
+        <li>• Ingresa el valor actual de cada cuenta en su moneda original (COP o USD)</li>
+        <li>• La fecha por defecto es hoy, pero puedes cambiarla si necesitas registrar un valor histórico</li>
+        <li>• Los valores se guardan en el historial y se usan para calcular el rendimiento</li>
+        <li>• Las subcuentas se actualizan independientemente de la cuenta principal</li>
+      </ul>
+    </div>
+  </div>
+</Default>

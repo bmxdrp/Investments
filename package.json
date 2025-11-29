@@ -6,9 +6,24 @@
     "dev": "astro dev",
     "build": "astro build",
     "preview": "astro preview",
-    "astro": "astro"
+    "astro": "astro",
+    "test": "jest",
+    "test:watch": "jest --watch"
   },
   "dependencies": {
-    "astro": "^5.15.9"
+    "@astrojs/vercel": "^9.0.1",
+    "@neondatabase/serverless": "^1.0.2",
+    "@tailwindcss/vite": "^4.1.17",
+    "argon2": "^0.44.0",
+    "astro": "^5.15.9",
+    "chart.js": "^4.5.1",
+    "chartjs-node-canvas": "^5.0.0",
+    "tailwindcss": "^4.1.17",
+    "zod": "^4.1.12"
+  },
+  "devDependencies": {
+    "@types/jest": "^30.0.0",
+    "jest": "^30.2.0",
+    "ts-jest": "^29.4.5"
   }
 }

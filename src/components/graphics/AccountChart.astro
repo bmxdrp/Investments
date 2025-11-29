@@ -1,0 +1,122 @@
+---
+interface Props {
+    accountId: number;
+    name: string;
+    currency: string;
+    history: { date: string; value: number }[];
+}
+
+const { accountId, name, currency, history } = Astro.props;
+
+const chartConfig = {
+    type: "line",
+    data: {
+        labels: history.map((h) =>
+            new Date(h.date).toLocaleDateString("es-CO", {
+                month: "short",
+                day: "numeric",
+            }),
+        ),
+        datasets: [
+            {
+                label: "Valor",
+                data: history.map((h) => h.value),
+                borderColor: "#2563eb", // blue-600
+                backgroundColor: "rgba(37, 99, 235, 0.1)",
+                borderWidth: 2.5,
+                pointRadius: 3,
+                pointBackgroundColor: "#2563eb",
+                pointBorderColor: "#fff",
+                pointBorderWidth: 1.5,
+                fill: true,
+                tension: 0.4,
+            },
+        ],
+    },
+    options: {
+        plugins: {
+            datalabels: {
+                display: (context: any) => {
+                    // Only show labels for every 3rd point to avoid overlap
+                    return context.dataIndex % 3 === 0;
+                },
+                align: "top",
+                offset: 4,
+                color: "#374151",
+                font: {
+                    size: 8,
+                    weight: "bold",
+                },
+                formatter: (value: number) => {
+                    if (value === 0) return "";
+                    return value.toLocaleString("es-CO", {
+                        notation: "compact",
+                        compactDisplay: "short",
+                        maximumFractionDigits: 1,
+                    });
+                },
+            },
+        },
+        legend: { display: false },
+        scales: {
+            xAxes: [
+                {
+                    gridLines: { color: "#e5e7eb", zeroLineColor: "#e5e7eb" },
+                    ticks: {
+                        fontColor: "#6b7280",
+                        fontSize: 8,
+                        maxRotation: 45,
+                        minRotation: 0,
+                    },
+                },
+            ],
+            yAxes: [
+                {
+                    gridLines: {
+                        color: "#f3f4f6",
+                        zeroLineColor: "#f3f4f6",
+                    },
+                    ticks: {
+                        fontColor: "#6b7280",
+                        fontSize: 9,
+                        callback: (val: number) =>
+                            val.toLocaleString("es-CO", {
+                                notation: "compact",
+                                compactDisplay: "short",
+                            }),
+                    },
+                },
+            ],
+        },
+    },
+};
+
+const chartUrl = `https://quickchart.io/chart?c=${encodeURIComponent(JSON.stringify(chartConfig))}&w=600&h=250&bkg=transparent`;
+---
+
+<div
+    class="bg-white p-4 sm:p-6 rounded-lg sm:rounded-xl shadow-sm border border-gray-200"
+>
+    <div class="flex items-center justify-between mb-4 sm:mb-6">
+        <h3
+            class="text-lg sm:text-xl font-bold text-gray-900 flex items-center gap-2"
+        >
+            <span class="w-1.5 h-6 bg-blue-600 rounded-full"></span>
+            {name}
+        </h3>
+        <span
+            class="px-2.5 py-0.5 bg-gray-100 text-gray-600 rounded-full text-xs font-medium border border-gray-200"
+        >
+            {currency}
+        </span>
+    </div>
+
+    <div class="relative w-full">
+        <img
+            src={chartUrl}
+            alt={`Gráfico histórico de ${name}`}
+            class="w-full h-auto rounded-lg"
+            loading="lazy"
+        />
+    </div>
+</div>

@@ -1,0 +1,313 @@
+---
+import Layout from "@layouts/default.astro";
+import Sidebar from "@components/sidebar.astro";
+import { sql, asRows } from "@lib/db";
+
+const userId = Astro.locals.userId;
+if (!userId) return Astro.redirect("/auth/login?returnTo=/dashboard/charts");
+
+// Latest FX
+const rateRows = asRows<{ usd_to_cop: number }>(
+  await sql`SELECT usd_to_cop FROM exchange_rates ORDER BY date DESC LIMIT 1;`,
+);
+const usdToCop = Number(rateRows[0]?.usd_to_cop ?? 0);
+
+// Totals: contributions, withdrawals (converted to COP using historical where needed can be improved)
+const totalContribRows = await sql`
+  SELECT COALESCE(SUM(CASE WHEN c.currency='USD' THEN c.amount * ${usdToCop} ELSE c.amount END),0) as total
+  FROM contributions c
+  JOIN accounts a ON a.id = c.account_id
+`;
+const totalWithdrawRows = await sql`
+  SELECT COALESCE(SUM(CASE WHEN w.currency='USD' THEN w.amount * ${usdToCop} ELSE w.amount END),0) as total
+  FROM withdrawals w
+  JOIN accounts a ON a.id = w.account_id
+`;
+const totalContributed = Number(totalContribRows[0].total);
+const totalWithdrawn = Number(totalWithdrawRows[0].total);
+
+// Latest portfolio total (sum of latest values per account converted to COP)
+const portfolioRows = await sql`
+  SELECT a.id, a.currency, COALESCE((SELECT pv.value FROM portfolio_values pv WHERE pv.account_id = a.id ORDER BY pv.date DESC LIMIT 1),0) AS latest_value
+  FROM accounts a
+`;
+let totalPortfolioCOP = 0;
+for (const r of portfolioRows) {
+  totalPortfolioCOP += Number(
+    r.currency === "USD"
+      ? Number(r.latest_value) * usdToCop
+      : Number(r.latest_value),
+  );
+}
+
+// Net return and ROI
+const netReturn = totalPortfolioCOP - (totalContributed - totalWithdrawn);
+const roi = totalContributed > 0 ? (netReturn / totalContributed) * 100 : 0;
+
+// Monthly contributions & withdrawals (last 12 months)
+const monthlyContrib = await sql`
+  SELECT to_char(date_trunc('month', c.date), 'YYYY-MM') AS month, 
+    SUM(CASE WHEN c.currency='USD' THEN c.amount * ${usdToCop} ELSE c.amount END) AS total
+  FROM contributions c
+  JOIN accounts a ON a.id = c.account_id
+  GROUP BY month
+  ORDER BY month DESC
+  LIMIT 12;
+`;
+
+const monthlyWithdraw = await sql`
+  SELECT to_char(date_trunc('month', w.date), 'YYYY-MM') AS month, 
+    SUM(CASE WHEN w.currency='USD' THEN w.amount * ${usdToCop} ELSE w.amount END) AS total
+  FROM withdrawals w
+  JOIN accounts a ON a.id = w.account_id
+  GROUP BY month
+  ORDER BY month DESC
+  LIMIT 12;
+`;
+
+// Distribution by currency (converted to COP)
+const distRows = await sql`
+  SELECT a.currency, SUM(COALESCE((SELECT pv.value FROM portfolio_values pv WHERE pv.account_id = a.id ORDER BY pv.date DESC LIMIT 1),0)) AS total
+  FROM accounts a
+  GROUP BY a.currency;
+`;
+const distribution = distRows.map((d: any) => ({
+  currency: d.currency,
+  total_cop:
+    d.currency === "USD" ? Number(d.total) * usdToCop : Number(d.total),
+}));
+
+// Volatility (stddev of daily returns)
+const dailyRows = await sql`
+  SELECT pv.date, SUM(CASE WHEN a.currency='USD' THEN pv.value * ${usdToCop} ELSE pv.value END) AS total
+  FROM portfolio_values pv
+  JOIN accounts a ON a.id = pv.account_id
+  GROUP BY pv.date
+  ORDER BY pv.date ASC;
+`;
+const dailyTotals = dailyRows.map((r: any) => Number(r.total));
+function stddev(arr: number[]) {
+  if (arr.length <= 1) return 0;
+  const mean = arr.reduce((s, v) => s + v, 0) / arr.length;
+  const variance =
+    arr.reduce((s, v) => s + Math.pow(v - mean, 2), 0) / (arr.length - 1);
+  return Math.sqrt(variance);
+}
+
+const returnsPct = dailyTotals.map((v, i) =>
+  i === 0 ? 0 : ((v - dailyTotals[i - 1]) / dailyTotals[i - 1]) * 100,
+);
+const volatility = stddev(returnsPct);
+
+// Top/Bottom months
+const monthlyNet = {} as Record<string, number>;
+for (const row of monthlyContrib) {
+  monthlyNet[row.month] = (monthlyNet[row.month] || 0) + Number(row.total);
+}
+for (const row of monthlyWithdraw) {
+  monthlyNet[row.month] = (monthlyNet[row.month] || 0) - Number(row.total);
+}
+const monthEntries = Object.entries(monthlyNet).sort(
+  (a, b) => Number(b[1]) - Number(a[1]),
+);
+const bestMonth = monthEntries[0] ?? null;
+const worstMonth = monthEntries[monthEntries.length - 1] ?? null;
+---
+
+<Layout title="Dashboard - Gráficos">
+  <div class="flex min-h-screen bg-gray-50 w-full">
+    <Sidebar activePage="dashboard" />
+
+    <main class="flex-1 ml-64 p-8 overflow-y-auto">
+      <div class="max-w-7xl mx-auto space-y-6">
+        <div class="flex items-center justify-between">
+          <div>
+            <h1 class="text-3xl font-bold text-gray-900">
+              Dashboard de Inversiones
+            </h1>
+            <p class="text-gray-600 mt-1">
+              Visión general y estadísticas clave
+            </p>
+          </div>
+          <div class="text-right">
+            <p class="text-sm text-gray-500">
+              Tipo de cambio USD/COP: <span class="font-mono font-semibold"
+                >{usdToCop.toFixed(2)}</span>
+            </p>
+          </div>
+        </div>
+
+        <!-- Indicators -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+            <p class="text-sm text-gray-600">Valor total del portafolio</p>
+            <p class="text-2xl font-bold mt-2">
+              {
+                totalPortfolioCOP.toLocaleString("es-CO", {
+                  style: "currency",
+                  currency: "COP",
+                  minimumFractionDigits: 0,
+                })
+              }
+            </p>
+          </div>
+
+          <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+            <p class="text-sm text-gray-600">Total invertido</p>
+            <p class="text-2xl font-bold mt-2">
+              {
+                totalContributed.toLocaleString("es-CO", {
+                  style: "currency",
+                  currency: "COP",
+                  minimumFractionDigits: 0,
+                })
+              }
+            </p>
+          </div>
+
+          <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+            <p class="text-sm text-gray-600">Total retirado</p>
+            <p class="text-2xl font-bold mt-2">
+              {
+                totalWithdrawn.toLocaleString("es-CO", {
+                  style: "currency",
+                  currency: "COP",
+                  minimumFractionDigits: 0,
+                })
+              }
+            </p>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+            <p class="text-sm text-gray-600">Retorno neto</p>
+            <p class="text-2xl font-bold mt-2">
+              {
+                netReturn.toLocaleString("es-CO", {
+                  style: "currency",
+                  currency: "COP",
+                  minimumFractionDigits: 0,
+                })
+              }
+            </p>
+            <p class="text-xs text-gray-500 mt-1">ROI {roi.toFixed(2)}%</p>
+          </div>
+
+          <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+            <p class="text-sm text-gray-600">Volatilidad (desv. %)</p>
+            <p class="text-2xl font-bold mt-2">{volatility.toFixed(2)}</p>
+            <p class="text-xs text-gray-500 mt-1">
+              Std dev of daily returns (%)
+            </p>
+          </div>
+
+          <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+            <p class="text-sm text-gray-600">Mejor mes (neto)</p>
+            <p class="text-2xl font-bold mt-2">
+              {
+                bestMonth
+                  ? `${bestMonth[0]} · ${Number(bestMonth[1]).toLocaleString("es-CO")}`
+                  : "—"
+              }
+            </p>
+            <p class="text-xs text-gray-500 mt-1">
+              Peor: {
+                worstMonth
+                  ? `${worstMonth[0]} · ${Number(worstMonth[1]).toLocaleString("es-CO")}`
+                  : "—"
+              }
+            </p>
+          </div>
+        </div>
+
+        <!-- Charts grid (3 columns) -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+            <h3 class="text-lg font-bold mb-3">Valor del portafolio</h3>
+            <img
+              src={`/api/graphics?type=historial_valores`}
+              alt="Valor del portafolio"
+            />
+          </div>
+
+          <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+            <h3 class="text-lg font-bold mb-3">Rentabilidad acumulada</h3>
+            <img
+              src={`/api/graphics?type=rentabilidad_acumulada`}
+              alt="Rentabilidad acumulada"
+            />
+          </div>
+
+          <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+            <h3 class="text-lg font-bold mb-3">Rendimiento % diario</h3>
+            <img
+              src={`/api/graphics?type=rendimiento_porcentual`}
+              alt="Rendimiento % diario"
+            />
+          </div>
+
+          <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+            <h3 class="text-lg font-bold mb-3">Aportes vs Retiros</h3>
+            <img
+              src={`/api/graphics?type=ingresos_vs_egresos`}
+              alt="Ingresos vs egresos"
+            />
+          </div>
+
+          <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+            <h3 class="text-lg font-bold mb-3">Distribución por moneda</h3>
+            <img
+              src={`/api/graphics?type=diversificacion`}
+              alt="Distribución por moneda"
+            />
+          </div>
+
+          <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+            <h3 class="text-lg font-bold mb-3">Comparativa COP / USD</h3>
+            <img
+              src={`/api/graphics?type=comparativa_cop_usd`}
+              alt="Comparativa COP USD"
+            />
+          </div>
+
+          <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+            <h3 class="text-lg font-bold mb-3">Evolución por tipo</h3>
+            <img
+              src={`/api/graphics?type=evolucion_por_tipo`}
+              alt="Evolución por tipo"
+            />
+          </div>
+
+          <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+            <h3 class="text-lg font-bold mb-3">Historial Aportes</h3>
+            <img
+              src={`/api/graphics?type=historial_aportes`}
+              alt="Historial aportes"
+            />
+          </div>
+
+          <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+            <h3 class="text-lg font-bold mb-3">Rentabilidad acumulada</h3>
+            <img
+              src={`/api/graphics?type=rentabilidad_acumulada`}
+              alt="Rentabilidad acumulada"
+            />
+          </div>
+        </div>
+
+        <!-- Footer / actions -->
+        <div class="flex items-center justify-end gap-3">
+          <a
+            class="inline-block bg-blue-600 text-white px-4 py-2 rounded"
+            href="#">Exportar CSV</a
+          >
+          <a
+            class="inline-block bg-gray-200 text-gray-800 px-4 py-2 rounded"
+            href="/admin">Volver</a
+          >
+        </div>
+      </div>
+    </main>
+  </div>
+</Layout>

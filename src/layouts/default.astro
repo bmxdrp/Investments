@@ -1,0 +1,28 @@
+---
+import "@styles/global.css";
+import Sidebar from "@components/sidebar.astro";
+
+interface Props {
+  title?: string;
+  activePage: string;
+}
+
+const { title, activePage } = Astro.props;
+---
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>{title}</title>
+  </head>
+  <body class="min-h-screen bg-slate-900">
+    <div class="flex flex-row justify-between min-h-screen bg-gray-50 w-full">
+      <aside class="lg:w-64">
+        <Sidebar activePage={activePage} />
+      </aside>
+      <main class="flex-1 w-full p-4 sm:p-6 lg:p-8 pt-16 md:pt-8 overflow-y-auto">
+        <slot />
+      </main>
+    </div>
+  </body>
+</html>

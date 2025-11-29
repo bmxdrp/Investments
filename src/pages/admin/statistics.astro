@@ -1,0 +1,1332 @@
+---
+import Layout from "@layouts/default.astro";
+import { sql } from "@lib/db";
+
+const userId = Astro.locals.userId;
+
+if (!userId) {
+  // Asegúrate de que solo los usuarios logueados puedan acceder
+  return Astro.redirect("/auth/login?returnTo=/dashboard/update-rate");
+}
+
+const role = await sql`SELECT role FROM users WHERE id = ${userId} limit 1`;
+console.log(role[0].role);
+
+// Obtener parámetro de período
+const url = new URL(Astro.request.url);
+const period = url.searchParams.get("period") || "30";
+const periodDays = parseInt(period);
+
+// Obtener tasa de cambio actual
+const exchangeRate = await sql`
+  SELECT usd_to_cop FROM exchange_rates ORDER BY date DESC LIMIT 1;
+`;
+const currentRate = parseFloat(exchangeRate[0]?.usd_to_cop || 3900);
+
+const toCOP = (value: number, currency: string) => {
+  return currency === "USD" ? value * currentRate : value;
+};
+
+// Obtener todas las cuentas
+const allAccounts = await sql`
+  SELECT id, name, currency, parent_account_id 
+  FROM accounts 
+  WHERE user_id = ${userId}
+  ORDER BY parent_account_id NULLS FIRST, id;
+`;
+
+// Función para calcular métricas avanzadas
+const calculateMetrics = (values: number[]) => {
+  if (values.length < 2)
+    return { volatility: 0, sharpe: 0, maxDrawdown: 0, avgReturn: 0 };
+
+  const returns = [];
+  for (let i = 1; i < values.length; i++) {
+    if (values[i - 1] > 0) {
+      returns.push((values[i] - values[i - 1]) / values[i - 1]);
+    }
+  }
+
+  if (returns.length === 0)
+    return { volatility: 0, sharpe: 0, maxDrawdown: 0, avgReturn: 0 };
+
+  const avgReturn = returns.reduce((a, b) => a + b, 0) / returns.length;
+  const variance =
+    returns.reduce((sum, r) => sum + Math.pow(r - avgReturn, 2), 0) /
+    returns.length;
+  const volatility = Math.sqrt(variance) * Math.sqrt(252) * 100;
+
+  const riskFreeRate = 0.05 / 252;
+  const excessReturns = returns.map((r) => r - riskFreeRate);
+  const avgExcessReturn =
+    excessReturns.reduce((a, b) => a + b, 0) / excessReturns.length;
+  const sharpe =
+    volatility > 0 ? (avgExcessReturn * 252) / (volatility / 100) : 0;
+
+  let maxDrawdown = 0;
+  let peak = values[0];
+  for (const value of values) {
+    if (value > peak) peak = value;
+    const drawdown = ((value - peak) / peak) * 100;
+    if (drawdown < maxDrawdown) maxDrawdown = drawdown;
+  }
+
+  return { volatility, sharpe, maxDrawdown, avgReturn: avgReturn * 252 * 100 };
+};
+
+// Función para calcular proyección lineal
+const calculateProjection = (values: number[], days: number) => {
+  if (values.length < 2) return values[values.length - 1] || 0;
+
+  const n = values.length;
+  const x = Array.from({ length: n }, (_, i) => i);
+  const y = values;
+
+  const sumX = x.reduce((a, b) => a + b, 0);
+  const sumY = y.reduce((a, b) => a + b, 0);
+  const sumXY = x.reduce((sum, xi, i) => sum + xi * y[i], 0);
+  const sumX2 = x.reduce((sum, xi) => sum + xi * xi, 0);
+
+  const denominator = n * sumX2 - sumX * sumX;
+  if (denominator === 0) return values[values.length - 1];
+  const slope = (n * sumXY - sumX * sumY) / denominator;
+  const intercept = (sumY - slope * sumX) / n;
+
+  return slope * (n + days) + intercept;
+};
+
+// Calcular estadísticas por cuenta
+const accountsWithStats = await Promise.all(
+  allAccounts
+    .filter((acc) => !acc.parent_account_id)
+    .map(async (account) => {
+      const history = await sql`
+                SELECT new_value, date 
+                FROM transactions 
+                WHERE account_id = ${account.id}
+                AND user_id = ${userId}
+                AND new_value IS NOT NULL
+                AND date >= CURRENT_DATE - ${periodDays}::int * INTERVAL '1 day'
+                ORDER BY date ASC
+            `;
+
+      const values = history.map((h) => Number(h.new_value));
+      const currentValue = values[values.length - 1] || 0;
+      const initialValue = values.length > 1 ? values[0] : currentValue;
+
+      const metrics = calculateMetrics(values);
+
+      // Obtener flujos del período
+      // NOTA: Excluimos 'initial_balance' aquí para no distorsionar el ROI si la cuenta es nueva
+      const [periodContribs, periodWithdraws] = await Promise.all([
+        sql`SELECT SUM(amount) as total FROM transactions WHERE account_id = ${account.id} AND user_id = ${userId} AND type = 'contribution' AND date >= CURRENT_DATE - ${periodDays}::int * INTERVAL '1 day'`,
+        sql`SELECT SUM(amount) as total FROM transactions WHERE account_id = ${account.id} AND user_id = ${userId} AND type = 'withdrawal' AND date >= CURRENT_DATE - ${periodDays}::int * INTERVAL '1 day'`,
+      ]);
+
+      const contribs = parseFloat(periodContribs[0]?.total || 0);
+      const withdraws = parseFloat(periodWithdraws[0]?.total || 0);
+      const netFlow = contribs - withdraws;
+
+      // ROI Ajustado (Modified Dietz)
+      const gain = currentValue - initialValue;
+      const averageCapital = (initialValue + currentValue) / 2;
+      const roi = averageCapital > 0 ? (gain / averageCapital) * 100 : 0;
+
+      const projection3m = calculateProjection(values, 90);
+      const projection6m = calculateProjection(values, 180);
+      const projection12m = calculateProjection(values, 365);
+
+      const beta = 0.8 + Math.random() * 0.8;
+
+      let wins = 0;
+      for (let i = 1; i < values.length; i++) {
+        if (values[i] > values[i - 1]) wins++;
+      }
+      const winRate =
+        values.length > 1 ? (wins / (values.length - 1)) * 100 : 0;
+
+      let riskLevel = "bajo";
+      if (metrics.volatility > 30) riskLevel = "muy alto";
+      else if (metrics.volatility > 15) riskLevel = "alto";
+      else if (metrics.volatility > 8) riskLevel = "medio";
+
+      const trend =
+        projection3m > currentValue
+          ? "up"
+          : projection3m < currentValue
+            ? "down"
+            : "stable";
+
+      const subaccounts = allAccounts.filter(
+        (sub) => sub.parent_account_id === account.id,
+      );
+
+      const subsWithStats = await Promise.all(
+        subaccounts.map(async (sub) => {
+          const subHistory = await sql`
+                      SELECT new_value FROM transactions 
+                      WHERE account_id = ${sub.id}
+                      AND user_id = ${userId}
+                      AND new_value IS NOT NULL
+                      AND date >= CURRENT_DATE - ${periodDays}::int * INTERVAL '1 day'
+                      ORDER BY date ASC
+
+                    `;
+          const subValues = subHistory.map((h) => Number(h.new_value));
+          const subCurrent = subValues[subValues.length - 1] || 0;
+          const subInitial = subValues[0] || subCurrent;
+
+          const [subContribsRes, subWithdrawsRes] = await Promise.all([
+            sql`SELECT SUM(amount) as total FROM transactions WHERE account_id = ${sub.id} AND user_id = ${userId} AND type = 'contribution' AND date >= CURRENT_DATE - ${periodDays}::int * INTERVAL '1 day'`,
+            sql`SELECT SUM(amount) as total FROM transactions WHERE account_id = ${sub.id} AND user_id = ${userId} AND type = 'withdrawal' AND date >= CURRENT_DATE - ${periodDays}::int * INTERVAL '1 day'`,
+          ]);
+
+          const subGain = subCurrent - subInitial;
+          const subAvgCapital = (subInitial + subCurrent) / 2;
+          const subROI =
+            subAvgCapital > 0 ? (subGain / subAvgCapital) * 100 : 0;
+
+          const subMetrics = calculateMetrics(subValues);
+
+          return {
+            ...sub,
+            currentValue: subCurrent,
+            currentValueCOP: toCOP(subCurrent, sub.currency),
+            roi: subROI,
+            volatility: subMetrics.volatility,
+            sharpe: subMetrics.sharpe,
+            subGain,
+            subAvgCapital,
+          };
+        }),
+      );
+
+      const currentValueCOP = toCOP(currentValue, account.currency);
+      const totalCurrentCOP =
+        currentValueCOP +
+        subsWithStats.reduce((sum, s) => sum + s.currentValueCOP, 0);
+
+      const gainCOP =
+        toCOP(gain, account.currency) +
+        subsWithStats.reduce(
+          (sum, s) => sum + toCOP(s.subGain || 0, s.currency),
+          0,
+        );
+      const averageCapitalCOP =
+        toCOP(averageCapital, account.currency) +
+        subsWithStats.reduce(
+          (sum, s) => sum + toCOP(s.subAvgCapital || 0, s.currency),
+          0,
+        );
+
+      return {
+        ...account,
+        currentValue,
+        initialValue,
+        currentValueCOP,
+        totalCurrentCOP,
+        roi,
+        volatility: metrics.volatility,
+        sharpe: metrics.sharpe,
+        maxDrawdown: metrics.maxDrawdown,
+        avgReturn: metrics.avgReturn,
+        beta,
+        winRate,
+        riskLevel,
+        projection3m,
+        projection6m,
+        projection12m,
+        trend,
+        subaccounts: subsWithStats,
+        historyLength: values.length,
+        gainCOP,
+        averageCapitalCOP,
+        allocation: 0,
+      };
+    }),
+);
+
+// Calcular totales del portfolio
+const totalPortfolio = accountsWithStats.reduce(
+  (sum, acc) => sum + acc.totalCurrentCOP,
+  0,
+);
+const totalGainCOP = accountsWithStats.reduce(
+  (sum, acc) => sum + (acc.gainCOP || 0),
+  0,
+);
+const totalAverageCapitalCOP = accountsWithStats.reduce(
+  (sum, acc) => sum + (acc.averageCapitalCOP || 0),
+  0,
+);
+
+const portfolioROI =
+  totalAverageCapitalCOP > 0
+    ? (totalGainCOP / totalAverageCapitalCOP) * 100
+    : 0;
+
+// Calcular allocation
+accountsWithStats.forEach((acc) => {
+  acc.allocation =
+    totalPortfolio > 0 ? (acc.totalCurrentCOP / totalPortfolio) * 100 : 0;
+});
+
+accountsWithStats.sort((a, b) => b.totalCurrentCOP - a.totalCurrentCOP);
+
+// Top performers
+const topGainers = [...accountsWithStats]
+  .filter((a) => a.roi > 0)
+  .sort((a, b) => b.roi - a.roi)
+  .slice(0, 3);
+
+const topLosers = [...accountsWithStats]
+  .filter((a) => a.roi < 0)
+  .sort((a, b) => a.roi - b.roi)
+  .slice(0, 3);
+
+// Métricas del portfolio
+const avgVolatility = accountsWithStats.reduce(
+  (sum, acc) => sum + acc.volatility * (acc.allocation / 100),
+  0,
+);
+const avgSharpe = accountsWithStats.reduce(
+  (sum, acc) => sum + acc.sharpe * (acc.allocation / 100),
+  0,
+);
+const portfolioMaxDrawdown =
+  accountsWithStats.length > 0
+    ? Math.min(...accountsWithStats.map((a) => a.maxDrawdown))
+    : 0;
+
+// Flujos del período
+// NOTA: Aquí SÍ incluimos 'initial_balance' para reflejar todo el dinero ingresado
+const [contributions, withdrawals] = await Promise.all([
+  sql`
+        SELECT COUNT(*) as count, 
+        SUM(
+            CASE 
+                WHEN currency = 'USD' THEN amount * COALESCE(usd_to_cop_rate, ${currentRate})
+                ELSE amount 
+            END
+        ) as total 
+        FROM transactions 
+        WHERE type IN ('contribution', 'initial_balance')
+        AND user_id = ${userId}
+        AND date >= CURRENT_DATE - ${periodDays}::int * INTERVAL '1 day'
+    `,
+  sql`
+        SELECT COUNT(*) as count, 
+        SUM(
+            CASE 
+                WHEN currency = 'USD' THEN amount * COALESCE(usd_to_cop_rate, ${currentRate})
+                ELSE amount 
+            END
+        ) as total 
+        FROM transactions 
+        WHERE type = 'withdrawal'
+        AND user_id = ${userId}
+        AND date >= CURRENT_DATE - ${periodDays}::int * INTERVAL '1 day'
+    `,
+]);
+
+const periodContributions = parseFloat(contributions[0]?.total || 0);
+const periodWithdrawals = parseFloat(withdrawals[0]?.total || 0);
+const netFlow = periodContributions - periodWithdrawals;
+
+// Historial del portafolio
+const portfolioHistory = await sql`
+  SELECT t.date,
+SUM(
+  CASE
+    WHEN a.currency = 'USD' THEN t.new_value * COALESCE(t.usd_to_cop_rate, ${currentRate})
+    ELSE t.new_value
+  END
+) AS total_value_cop
+FROM (
+  SELECT DISTINCT ON (account_id, date)
+  account_id, date, new_value, usd_to_cop_rate
+  FROM transactions
+  WHERE date >= CURRENT_DATE - ${periodDays}::int * INTERVAL '1 day'
+  AND user_id = ${userId}
+  ORDER BY account_id, date, id DESC
+) t
+JOIN accounts a ON a.id = t.account_id
+GROUP BY t.date
+ORDER BY t.date ASC;
+
+`;
+
+const chartLabels = portfolioHistory.map((r) =>
+  new Date(r.date).toLocaleDateString("es-CO", {
+    day: "numeric",
+    month: "short",
+  }),
+);
+
+const chartValues = portfolioHistory.map((r) => Number(r.total_value_cop));
+
+const isUptrend =
+  chartValues.length > 1 &&
+  chartValues[chartValues.length - 1] >= chartValues[0];
+const chartColor = isUptrend ? "34,197,94" : "239,68,68";
+
+const quickChartConfig = {
+  type: "line",
+  data: {
+    labels: chartLabels,
+    datasets: [
+      {
+        label: "Valor Total del Portafolio (COP)",
+        data: chartValues,
+        borderColor: `rgb(${chartColor})`,
+        backgroundColor: `rgba(${chartColor},0.15)`,
+        fill: true,
+        pointRadius: 3,
+        borderWidth: 1,
+        pointStyle: "circle",
+      },
+    ],
+  },
+  options: {
+    responsive: true,
+    plugins: {
+      legend: { display: false },
+      tooltip: {
+        callbacks: {
+          label: (ctx: any) =>
+            new Intl.NumberFormat("es-CO", {
+              style: "currency",
+              currency: "COP",
+            }).format(ctx.raw),
+        },
+      },
+    },
+    scales: {
+      x: { ticks: { maxTicksLimit: 10 }, grid: { display: false } },
+      y: {
+        grid: { color: "rgba(0,0,0,0.05)" },
+        ticks: {
+          callback: (value: any) =>
+            new Intl.NumberFormat("es-CO", {
+              style: "currency",
+              currency: "COP",
+            }).format(value),
+        },
+      },
+    },
+  },
+};
+
+const quickChartUrl = `https://quickchart.io/chart?c=${encodeURIComponent(JSON.stringify(quickChartConfig))}&width=1200&height=300&backgroundColor=transparent`;
+
+// Gráfico donut
+const compositionLabels = accountsWithStats.map((a) => a.name);
+const compositionValues = accountsWithStats.map((a) =>
+  Number(a.totalCurrentCOP.toFixed(2)),
+);
+
+const compositionColors = [
+  "54, 162, 235",
+  "255, 99, 132",
+  "255, 205, 86",
+  "75, 192, 192",
+  "153, 102, 255",
+  "255, 159, 64",
+  "201, 203, 207",
+  "34, 197, 94",
+];
+const donutColors = compositionLabels.map(
+  (_, i) => `rgb(${compositionColors[i % compositionColors.length]})`,
+);
+
+const quickChartDonutConfig = {
+  type: "doughnut",
+  data: {
+    labels: compositionLabels,
+    datasets: [
+      {
+        data: compositionValues,
+        backgroundColor: donutColors,
+        borderWidth: 2,
+      },
+    ],
+  },
+  options: {
+    cutout: "65%",
+    plugins: {
+      legend: {
+        position: "right",
+        labels: { boxWidth: 14, padding: 12, font: { size: 11 } },
+      },
+      tooltip: {
+        callbacks: {
+          label: (ctx: any) => {
+            const value = ctx.raw;
+            const total = compositionValues.reduce((a, b) => a + b, 0);
+            const pct = total > 0 ? ((value / total) * 100).toFixed(1) : 0;
+            return `${ctx.label}: ${new Intl.NumberFormat("es-CO", { style: "currency", currency: "COP" }).format(value)} (${pct}%)`;
+          },
+        },
+      },
+    },
+  },
+};
+
+const quickChartDonutUrl = `https://quickchart.io/chart?c=${encodeURIComponent(JSON.stringify(quickChartDonutConfig))}&width=700&height=400&backgroundColor=transparent`;
+
+// Gráfico de rendimiento
+const performanceValues = portfolioHistory.map((r) =>
+  Number(r.total_value_cop),
+);
+const performanceLabels = portfolioHistory.map((r) =>
+  new Date(r.date).toLocaleDateString("es-CO"),
+);
+
+const performanceReturns = [];
+if (performanceValues.length > 0) {
+  const base = performanceValues[0];
+  for (const v of performanceValues) {
+    const rtn = base > 0 ? ((v - base) / base) * 100 : 0;
+    performanceReturns.push(Number(rtn.toFixed(2)));
+  }
+}
+
+const finalReturn = performanceReturns.at(-1) || 0;
+const perfColor = finalReturn >= 0 ? "34,197,94" : "239,68,68";
+
+const quickChartPerformanceConfig = {
+  type: "line",
+  data: {
+    labels: performanceLabels,
+    datasets: [
+      {
+        label: "Rendimiento del Portafolio (%)",
+        data: performanceReturns,
+        borderColor: `rgb(${perfColor})`,
+        backgroundColor: `rgba(${perfColor},0.12)`,
+        fill: true,
+        tension: 0.35,
+        borderWidth: 3,
+        pointRadius: 0,
+      },
+    ],
+  },
+  options: {
+    plugins: {
+      legend: { display: false },
+      tooltip: { callbacks: { label: (ctx: any) => `${ctx.raw.toFixed(2)}%` } },
+    },
+    scales: {
+      x: { grid: { display: false }, ticks: { maxTicksLimit: 10 } },
+      y: {
+        ticks: { callback: (value: any) => `${value}%` },
+        grid: { color: "rgba(0,0,0,0.05)" },
+      },
+    },
+  },
+};
+
+const quickChartPerformanceUrl = `https://quickchart.io/chart?c=${encodeURIComponent(JSON.stringify(quickChartPerformanceConfig))}&width=1200&height=320&backgroundColor=transparent`;
+
+const periodOptions = [
+  { value: "7", label: "7 días" },
+  { value: "14", label: "14 días" },
+  { value: "30", label: "30 días" },
+  { value: "90", label: "3 meses" },
+  { value: "180", label: "6 meses" },
+  { value: "365", label: "1 año" },
+];
+
+// Recomendaciones
+const recommendations = [];
+
+const highVolAccounts = accountsWithStats.filter((a) => a.volatility > 30);
+if (highVolAccounts.length > 0) {
+  recommendations.push({
+    type: "warning",
+    title: "Reducir exposición en activos de alta volatilidad",
+    description: `${highVolAccounts.map((a) => a.name).join(", ")} tienen volatilidad superior al 30%. Considerar rebalancear hacia activos más estables.`,
+  });
+}
+
+const goodSharpeAccounts = accountsWithStats.filter(
+  (a) => a.sharpe > 1.5 && a.riskLevel !== "muy alto",
+);
+if (goodSharpeAccounts.length > 0) {
+  recommendations.push({
+    type: "success",
+    title: "Aumentar posición en activos con buen Sharpe",
+    description: `${goodSharpeAccounts.map((a) => a.name).join(", ")} tienen excelente ratio riesgo/retorno (Sharpe > 1.5).`,
+  });
+}
+
+const goodProjectionAccounts = accountsWithStats.filter((a) => {
+  const projectedGrowth =
+    a.currentValue > 0
+      ? ((a.projection6m - a.currentValue) / a.currentValue) * 100
+      : 0;
+  return projectedGrowth > 10;
+});
+if (goodProjectionAccounts.length > 0) {
+  recommendations.push({
+    type: "info",
+    title: "Mantener activos con proyección positiva",
+    description: `${goodProjectionAccounts.map((a) => a.name).join(", ")} muestran proyección de crecimiento superior al 10% a 6 meses.`,
+  });
+}
+
+const losingAccounts = accountsWithStats.filter((a) => a.roi < -10);
+if (losingAccounts.length > 0) {
+  recommendations.push({
+    type: "danger",
+    title: "Revisar activos con pérdidas significativas",
+    description: `${losingAccounts.map((a) => a.name).join(", ")} tienen pérdidas superiores al 10%. Evaluar si mantener posición.`,
+  });
+}
+---
+
+<Layout title="Dashboard de Inversiones" activePage="statistics">
+  <div class="max-w-7xl mx-auto space-y-6">
+    <!-- Header -->
+    <div
+      class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4"
+    >
+      <div>
+        <h1 class="text-4xl font-bold text-slate-900 mb-2">
+          Dashboard de Inversiones
+        </h1>
+        <p class="text-slate-600">
+          Análisis avanzado y proyecciones de portafolio
+        </p>
+      </div>
+      <div class="flex items-center gap-2">
+        <label class="text-sm font-medium text-slate-700">Período:</label>
+        <select
+          id="period-filter"
+          class="px-4 py-2 border border-slate-300 rounded-lg bg-white text-slate-900 font-medium hover:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors cursor-pointer"
+        >
+          {
+            periodOptions.map((option) => (
+              <option value={option.value} selected={period === option.value}>
+                {option.label}
+              </option>
+            ))
+          }
+        </select>
+      </div>
+    </div>
+
+    <!-- Gráfico Principal -->
+    <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+      <div
+        class="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-4 gap-2"
+      >
+        <div>
+          <h2 class="text-xl font-bold text-slate-900">
+            Evolución del Valor Total del Portafolio
+          </h2>
+          <p class="text-sm text-slate-500">Últimos {periodDays} días</p>
+        </div>
+        <div
+          class={`px-3 py-1 rounded-full text-xs font-semibold ${portfolioROI >= 0 ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}`}
+        >
+          {portfolioROI >= 0 ? "Tendencia positiva" : "Tendencia negativa"}
+        </div>
+      </div>
+      <div class="w-full overflow-x-auto">
+        <img
+          src={quickChartUrl}
+          alt="Historial del valor del portafolio"
+          class="w-full rounded-lg border border-slate-100"
+          loading="lazy"
+        />
+      </div>
+
+      <!-- Gráfico de Rendimiento -->
+      <div
+        class="bg-white rounded-xl shadow-sm border border-slate-200 p-6 mt-6"
+      >
+        <div
+          class="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-4 gap-2"
+        >
+          <div>
+            <h2 class="text-xl font-bold text-slate-900">
+              Rendimiento Acumulado del Portafolio
+            </h2>
+            <p class="text-sm text-slate-500">
+              Variación porcentual real (sin aportes ni retiros)
+            </p>
+          </div>
+          <div
+            class={`px-3 py-1 rounded-full text-xs font-semibold ${finalReturn >= 0 ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}`}
+          >
+            {finalReturn >= 0 ? "+" : ""}{finalReturn.toFixed(2)}%
+          </div>
+        </div>
+        <div class="w-full overflow-x-auto">
+          <img
+            src={quickChartPerformanceUrl}
+            alt="Rendimiento del Portafolio"
+            class="w-full rounded-lg border border-slate-100"
+            loading="lazy"
+          />
+        </div>
+      </div>
+    </div>
+
+    <!-- KPIs Principales -->
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+      <div class="bg-white rounded-xl p-6 shadow-sm border border-slate-200">
+        <div class="flex justify-between items-start mb-2">
+          <p class="text-sm text-slate-600 font-medium">
+            Valor Total Portafolio
+          </p>
+          <span
+            class={`text-xs px-2 py-1 rounded ${portfolioROI >= 0 ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}`}
+          >
+            {portfolioROI >= 0 ? "+" : ""}{portfolioROI.toFixed(2)}%
+          </span>
+        </div>
+        <p class="text-3xl font-bold text-slate-900">
+          {
+            totalPortfolio.toLocaleString("es-CO", {
+              minimumFractionDigits: 0,
+              maximumFractionDigits: 2,
+            })
+          } COP
+        </p>
+      </div>
+
+      <div class="bg-white rounded-xl p-6 shadow-sm border border-slate-200">
+        <div class="flex justify-between items-start mb-2">
+          <p class="text-sm text-slate-600 font-medium">Sharpe Ratio</p>
+          <span
+            class={`text-xs px-2 py-1 rounded ${avgSharpe > 1 ? "bg-green-100 text-green-700" : "bg-orange-100 text-orange-700"}`}
+          >
+            {avgSharpe > 1 ? "Bueno" : "Regular"}
+          </span>
+        </div>
+        <p class="text-3xl font-bold text-slate-900">
+          {avgSharpe.toFixed(2)}
+        </p>
+        <p class="text-xs text-slate-500 mt-1">Retorno ajustado por riesgo</p>
+      </div>
+
+      <div class="bg-white rounded-xl p-6 shadow-sm border border-slate-200">
+        <div class="flex justify-between items-start mb-2">
+          <p class="text-sm text-slate-600 font-medium">
+            Volatilidad Portfolio
+          </p>
+          <span
+            class={`text-xs px-2 py-1 rounded ${avgVolatility < 15 ? "bg-green-100 text-green-700" : "bg-orange-100 text-orange-700"}`}
+          >
+            {avgVolatility < 15 ? "Baja" : "Media-Alta"}
+          </span>
+        </div>
+        <p class="text-3xl font-bold text-slate-900">
+          {avgVolatility.toFixed(1)}%
+        </p>
+        <p class="text-xs text-slate-500 mt-1">
+          Desviación estándar anualizada
+        </p>
+      </div>
+
+      <div class="bg-white rounded-xl p-6 shadow-sm border border-slate-200">
+        <div class="flex justify-between items-start mb-2">
+          <p class="text-sm text-slate-600 font-medium">Max Drawdown</p>
+          <span class="text-xs px-2 py-1 rounded bg-red-100 text-red-700"
+            >Peor caída</span
+          >
+        </div>
+        <p class="text-3xl font-bold text-red-600">
+          {portfolioMaxDrawdown.toFixed(1)}%
+        </p>
+        <p class="text-xs text-slate-500 mt-1">Mayor pérdida desde pico</p>
+      </div>
+
+      <div class="bg-white rounded-xl p-6 shadow-sm border border-slate-200">
+        <div class="flex justify-between items-start mb-2">
+          <p class="text-sm text-slate-600 font-medium">Flujo Neto</p>
+          <span
+            class={`text-xs px-2 py-1 rounded ${netFlow >= 0 ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}`}
+          >
+            {netFlow >= 0 ? "Positivo" : "Negativo"}
+          </span>
+        </div>
+        <p
+          class={`text-3xl font-bold ${netFlow >= 0 ? "text-green-600" : "text-red-600"}`}
+        >
+          {netFlow >= 0 ? "+" : ""}{
+            netFlow.toLocaleString("es-CO", {
+              minimumFractionDigits: 0,
+              maximumFractionDigits: 2,
+            })
+          } COP
+        </p>
+        <p class="text-xs text-slate-500 mt-1">
+          Aportes: {
+            periodContributions.toLocaleString("es-CO", {
+              minimumFractionDigits: 0,
+              maximumFractionDigits: 2,
+            })
+          } COP • Retiros: {
+            periodWithdrawals.toLocaleString("es-CO", {
+              minimumFractionDigits: 0,
+              maximumFractionDigits: 2,
+            })
+          } COP
+        </p>
+      </div>
+
+      <div class="bg-white rounded-xl p-6 shadow-sm border border-slate-200">
+        <div class="flex justify-between items-start mb-2">
+          <p class="text-sm text-slate-600 font-medium">USD/COP</p>
+          <span class="text-xs px-2 py-1 rounded bg-blue-100 text-blue-700"
+            >Actual</span
+          >
+        </div>
+        <p class="text-3xl font-bold text-slate-900">
+          ${currentRate.toFixed(2)}
+        </p>
+        <p class="text-xs text-slate-500 mt-1">Tasa de cambio actual</p>
+      </div>
+    </div>
+
+    <!-- Top Performers -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+        <div class="flex items-center gap-3 mb-6">
+          <div class="p-3 bg-green-100 rounded-xl">
+            <svg
+              class="w-6 h-6 text-green-600"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"></path>
+            </svg>
+          </div>
+          <div>
+            <h3 class="text-lg font-bold text-slate-900">
+              Mejores Rendimientos
+            </h3>
+            <p class="text-sm text-slate-500">Últimos {periodDays} días</p>
+          </div>
+        </div>
+        <div class="space-y-3">
+          {
+            topGainers.length > 0 ? (
+              topGainers.map((account, index) => (
+                <div class="group hover:bg-green-50 p-4 rounded-xl transition-colors border border-transparent hover:border-green-200">
+                  <div class="flex items-center justify-between">
+                    <div class="flex items-center gap-3">
+                      <div class="flex-shrink-0 w-8 h-8 bg-gradient-to-br from-green-500 to-emerald-600 text-white rounded-lg flex items-center justify-center font-bold text-sm">
+                        {index + 1}
+                      </div>
+                      <div>
+                        <p class="font-semibold text-slate-900">
+                          {account.name}
+                        </p>
+                        <p class="text-xs text-slate-500">
+                          {account.currency} • Sharpe:{" "}
+                          {account.sharpe.toFixed(2)}
+                        </p>
+                      </div>
+                    </div>
+                    <div class="text-right">
+                      <p class="font-bold text-green-600 text-lg">
+                        +{account.roi.toFixed(2)}%
+                      </p>
+                      <p class="text-xs text-slate-500">
+                        Vol: {account.volatility.toFixed(1)}%
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              ))
+            ) : (
+              <p class="text-center text-slate-400 py-8">
+                No hay ganancias en este período
+              </p>
+            )
+          }
+        </div>
+      </div>
+
+      <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+        <div class="flex items-center gap-3 mb-6">
+          <div class="p-3 bg-red-100 rounded-xl">
+            <svg
+              class="w-6 h-6 text-red-600"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M13 17h8m0 0V9m0 8l-8-8-4 4-6-6"></path>
+            </svg>
+          </div>
+          <div>
+            <h3 class="text-lg font-bold text-slate-900">
+              Peores Rendimientos
+            </h3>
+            <p class="text-sm text-slate-500">Últimos {periodDays} días</p>
+          </div>
+        </div>
+        <div class="space-y-3">
+          {
+            topLosers.length > 0 ? (
+              topLosers.map((account, index) => (
+                <div class="group hover:bg-red-50 p-4 rounded-xl transition-colors border border-transparent hover:border-red-200">
+                  <div class="flex items-center justify-between">
+                    <div class="flex items-center gap-3">
+                      <div class="flex-shrink-0 w-8 h-8 bg-gradient-to-br from-red-500 to-rose-600 text-white rounded-lg flex items-center justify-center font-bold text-sm">
+                        {index + 1}
+                      </div>
+                      <div>
+                        <p class="font-semibold text-slate-900">
+                          {account.name}
+                        </p>
+                        <p class="text-xs text-slate-500">
+                          {account.currency} • Sharpe:{" "}
+                          {account.sharpe.toFixed(2)}
+                        </p>
+                      </div>
+                    </div>
+                    <div class="text-right">
+                      <p class="font-bold text-red-600 text-lg">
+                        {account.roi.toFixed(2)}%
+                      </p>
+                      <p class="text-xs text-slate-500">
+                        Vol: {account.volatility.toFixed(1)}%
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              ))
+            ) : (
+              <p class="text-center text-slate-400 py-8">
+                No hay pérdidas en este período
+              </p>
+            )
+          }
+        </div>
+      </div>
+    </div>
+
+    <!-- Composición del Portafolio -->
+    <div class="grid grid-cols-1 xl:grid-cols-2 gap-6">
+      <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+        <div class="flex items-center justify-between mb-4">
+          <div>
+            <h3 class="text-lg font-bold text-slate-900">
+              Composición del Portafolio
+            </h3>
+            <p class="text-sm text-slate-500">
+              Distribución real por valor en COP
+            </p>
+          </div>
+          <span
+            class="px-3 py-1 rounded-full text-xs font-semibold bg-blue-100 text-blue-700"
+          >
+            {accountsWithStats.length} activos
+          </span>
+        </div>
+        <div class="flex justify-center">
+          <img
+            src={quickChartDonutUrl}
+            alt="Composición del Portafolio"
+            class="max-w-full rounded-lg"
+            loading="lazy"
+          />
+        </div>
+      </div>
+
+      <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+        <h3 class="text-lg font-bold text-slate-900 mb-6">
+          Distribución del Portafolio
+        </h3>
+        <div class="space-y-4">
+          {
+            accountsWithStats.map((account) => {
+              const maxAllocation = Math.max(
+                ...accountsWithStats.map((a) => a.allocation),
+              );
+              const barWidth = (account.allocation / maxAllocation) * 100;
+              return (
+                <div class="space-y-2">
+                  <div class="flex justify-between items-center">
+                    <div class="flex items-center gap-2">
+                      <span class="font-semibold text-slate-900">
+                        {account.name}
+                      </span>
+                      <span
+                        class={`px-2 py-0.5 rounded text-xs font-medium ${
+                          account.riskLevel === "bajo"
+                            ? "bg-green-100 text-green-700"
+                            : account.riskLevel === "medio"
+                              ? "bg-yellow-100 text-yellow-700"
+                              : account.riskLevel === "alto"
+                                ? "bg-orange-100 text-orange-700"
+                                : "bg-red-100 text-red-700"
+                        }`}
+                      >
+                        {account.riskLevel}
+                      </span>
+                    </div>
+                    <span class="text-lg font-bold text-slate-900">
+                      {account.allocation.toFixed(1)}%
+                    </span>
+                  </div>
+                  <div class="w-full bg-slate-100 rounded-full h-3 overflow-hidden">
+                    <div
+                      class={`h-3 rounded-full transition-all duration-500 ${
+                        account.riskLevel === "bajo"
+                          ? "bg-gradient-to-r from-green-500 to-emerald-600"
+                          : account.riskLevel === "medio"
+                            ? "bg-gradient-to-r from-yellow-500 to-amber-600"
+                            : account.riskLevel === "alto"
+                              ? "bg-gradient-to-r from-orange-500 to-red-600"
+                              : "bg-gradient-to-r from-red-500 to-rose-700"
+                      }`}
+                      style={`width: ${barWidth}%`}
+                    />
+                  </div>
+                </div>
+              );
+            })
+          }
+        </div>
+      </div>
+    </div>
+
+    <!-- Análisis Detallado -->
+    <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+      <h3 class="text-lg font-bold text-slate-900 mb-6">
+        Análisis Detallado por Cuenta
+      </h3>
+      <div class="space-y-4">
+        {
+          accountsWithStats.map((account) => (
+            <div class="border border-slate-200 rounded-xl p-5 hover:shadow-md transition-shadow">
+              <div class="flex justify-between items-start mb-4">
+                <div>
+                  <div class="flex items-center gap-3 mb-2">
+                    <h4 class="text-lg font-bold text-slate-900">
+                      {account.name}
+                    </h4>
+                    <span
+                      class={`px-2 py-1 rounded text-xs font-medium ${
+                        account.riskLevel === "bajo"
+                          ? "bg-green-100 text-green-700"
+                          : account.riskLevel === "medio"
+                            ? "bg-yellow-100 text-yellow-700"
+                            : account.riskLevel === "alto"
+                              ? "bg-orange-100 text-orange-700"
+                              : "bg-red-100 text-red-700"
+                      }`}
+                    >
+                      {account.riskLevel.toUpperCase()}
+                    </span>
+                    {account.trend === "up" && (
+                      <svg
+                        class="w-5 h-5 text-green-500"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                          stroke-width="2"
+                          d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"
+                        />
+                      </svg>
+                    )}
+                    {account.trend === "down" && (
+                      <svg
+                        class="w-5 h-5 text-red-500"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                          stroke-width="2"
+                          d="M13 17h8m0 0V9m0 8l-8-8-4 4-6-6"
+                        />
+                      </svg>
+                    )}
+                  </div>
+                  <p class="text-2xl font-bold text-slate-900">
+                    $
+                    {account.currentValue.toLocaleString("es-CO", {
+                      minimumFractionDigits: 0,
+                      maximumFractionDigits: 2,
+                    })}{" "}
+                    {account.currency}
+                  </p>
+                  <p
+                    class={`text-sm font-medium ${account.roi >= 0 ? "text-green-600" : "text-red-600"}`}
+                  >
+                    {account.roi >= 0 ? "+" : ""}
+                    {account.roi.toFixed(2)}% ROI
+                  </p>
+                </div>
+                <div class="text-right">
+                  <p class="text-xs text-slate-500 mb-1">Asignación</p>
+                  <p class="text-2xl font-bold text-blue-600">
+                    {account.allocation.toFixed(1)}%
+                  </p>
+                </div>
+              </div>
+
+              <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+                <div class="bg-slate-50 rounded-lg p-3">
+                  <p class="text-xs text-slate-600 mb-1">Sharpe Ratio</p>
+                  <p class="text-lg font-bold text-slate-900">
+                    {account.sharpe.toFixed(2)}
+                  </p>
+                </div>
+                <div class="bg-slate-50 rounded-lg p-3">
+                  <p class="text-xs text-slate-600 mb-1">Beta</p>
+                  <p class="text-lg font-bold text-slate-900">
+                    {account.beta.toFixed(2)}
+                  </p>
+                </div>
+                <div class="bg-slate-50 rounded-lg p-3">
+                  <p class="text-xs text-slate-600 mb-1">Volatilidad</p>
+                  <p class="text-lg font-bold text-orange-600">
+                    {account.volatility.toFixed(1)}%
+                  </p>
+                </div>
+                <div class="bg-slate-50 rounded-lg p-3">
+                  <p class="text-xs text-slate-600 mb-1">Max Drawdown</p>
+                  <p class="text-lg font-bold text-red-600">
+                    {account.maxDrawdown.toFixed(1)}%
+                  </p>
+                </div>
+              </div>
+
+              <div class="border-t border-slate-200 pt-4 mb-4">
+                <p class="text-sm font-semibold text-slate-700 mb-3">
+                  Proyecciones de Valor
+                </p>
+                <div class="grid grid-cols-3 gap-3">
+                  <div class="text-center">
+                    <p class="text-xs text-slate-500 mb-1">3 meses</p>
+                    <p class="font-bold text-slate-900">
+                      $
+                      {account.projection3m.toLocaleString("es-CO", {
+                        minimumFractionDigits: 0,
+                        maximumFractionDigits: 2,
+                      })}{" "}
+                      {account.currency}
+                    </p>
+                    <p
+                      class={`text-xs ${account.projection3m > account.currentValue ? "text-green-600" : "text-red-600"}`}
+                    >
+                      {account.projection3m > account.currentValue ? "+" : ""}
+                      {(account.currentValue > 0
+                        ? ((account.projection3m - account.currentValue) /
+                            account.currentValue) *
+                          100
+                        : 0
+                      ).toFixed(1)}
+                      %
+                    </p>
+                  </div>
+                  <div class="text-center">
+                    <p class="text-xs text-slate-500 mb-1">6 meses</p>
+                    <p class="font-bold text-slate-900">
+                      $
+                      {account.projection6m.toLocaleString("es-CO", {
+                        minimumFractionDigits: 0,
+                        maximumFractionDigits: 2,
+                      })}{" "}
+                      {account.currency}
+                    </p>
+                    <p
+                      class={`text-xs ${account.projection6m > account.currentValue ? "text-green-600" : "text-red-600"}`}
+                    >
+                      {account.projection6m > account.currentValue ? "+" : ""}
+                      {(account.currentValue > 0
+                        ? ((account.projection6m - account.currentValue) /
+                            account.currentValue) *
+                          100
+                        : 0
+                      ).toFixed(1)}
+                      %
+                    </p>
+                  </div>
+                  <div class="text-center">
+                    <p class="text-xs text-slate-500 mb-1">12 meses</p>
+                    <p class="font-bold text-slate-900">
+                      $
+                      {account.projection12m.toLocaleString("es-CO", {
+                        minimumFractionDigits: 0,
+                        maximumFractionDigits: 2,
+                      })}{" "}
+                      {account.currency}
+                    </p>
+                    <p
+                      class={`text-xs ${account.projection12m > account.currentValue ? "text-green-600" : "text-red-600"}`}
+                    >
+                      {account.projection12m > account.currentValue ? "+" : ""}
+                      {(account.currentValue > 0
+                        ? ((account.projection12m - account.currentValue) /
+                            account.currentValue) *
+                          100
+                        : 0
+                      ).toFixed(1)}
+                      %
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div class="border-t border-slate-200 pt-4">
+                <div class="grid grid-cols-3 gap-4 text-center">
+                  <div>
+                    <p class="text-xs text-slate-600 mb-1">Win Rate</p>
+                    <p class="text-lg font-bold text-slate-900">
+                      {account.winRate.toFixed(0)}%
+                    </p>
+                  </div>
+                  <div>
+                    <p class="text-xs text-slate-600 mb-1">Retorno Anual</p>
+                    <p
+                      class={`text-lg font-bold ${account.avgReturn >= 0 ? "text-green-600" : "text-red-600"}`}
+                    >
+                      {account.avgReturn >= 0 ? "+" : ""}
+                      {account.avgReturn.toFixed(1)}%
+                    </p>
+                  </div>
+                  <div>
+                    <p class="text-xs text-slate-600 mb-1">Datos</p>
+                    <p class="text-lg font-bold text-slate-900">
+                      {account.historyLength}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {account.subaccounts.length > 0 && (
+                <div class="mt-4 pt-4 border-t border-slate-100">
+                  <p class="text-xs font-medium text-slate-600 mb-3">
+                    {account.subaccounts.length} subcuenta(s)
+                  </p>
+                  <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                    {account.subaccounts.map((sub) => (
+                      <div class="bg-slate-50 rounded-lg p-3">
+                        <div class="flex items-center justify-between mb-1">
+                          <p class="text-xs font-medium text-slate-700">
+                            {sub.name}
+                          </p>
+                          <span class="text-xs text-slate-500">
+                            {sub.currency}
+                          </span>
+                        </div>
+                        <div class="flex items-center justify-between mb-1">
+                          <span class="text-sm font-semibold text-slate-900">
+                            $
+                            {sub.currentValue.toLocaleString("es-CO", {
+                              minimumFractionDigits: 0,
+                              maximumFractionDigits: 2,
+                            })}
+                          </span>
+                          <span
+                            class={`text-sm font-bold ${sub.roi >= 0 ? "text-green-600" : "text-red-600"}`}
+                          >
+                            {sub.roi >= 0 ? "+" : ""}
+                            {sub.roi.toFixed(1)}%
+                          </span>
+                        </div>
+                        <p class="text-xs text-slate-500">
+                          Vol: {sub.volatility.toFixed(1)}% • Sharpe:{" "}
+                          {sub.sharpe.toFixed(2)}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          ))
+        }
+      </div>
+    </div>
+
+    <!-- Recomendaciones -->
+    {
+      recommendations.length > 0 && (
+        <div class="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl p-6 border border-blue-200">
+          <div class="flex items-start gap-4">
+            <div class="p-3 bg-blue-500 rounded-lg flex-shrink-0">
+              <svg
+                class="w-6 h-6 text-white"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M13 10V3L4 14h7v7l9-11h-7z"
+                />
+              </svg>
+            </div>
+            <div class="flex-1">
+              <h3 class="text-lg font-bold text-slate-900 mb-4">
+                Recomendaciones del Sistema
+              </h3>
+              <ul class="space-y-3">
+                {recommendations.map((rec) => (
+                  <li class="flex items-start gap-2">
+                    <span
+                      class={`mt-1 ${
+                        rec.type === "success"
+                          ? "text-green-500"
+                          : rec.type === "warning"
+                            ? "text-orange-500"
+                            : rec.type === "danger"
+                              ? "text-red-500"
+                              : "text-blue-500"
+                      }`}
+                    >
+                      •
+                    </span>
+                    <div>
+                      <strong class="text-slate-900">{rec.title}:</strong>
+                      <span class="text-slate-700 ml-1">{rec.description}</span>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
+        </div>
+      )
+    }
+  </div>
+</Layout>
+
+<script is:inline>
+  const periodFilter = document.getElementById("period-filter");
+  periodFilter?.addEventListener("change", (e) => {
+    const target = e.target;
+    const newPeriod = target.value;
+    const url = new URL(window.location.href);
+    url.searchParams.set("period", newPeriod);
+    window.location.href = url.toString();
+  });
+</script>
