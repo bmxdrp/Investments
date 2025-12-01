@@ -1,9 +1,14 @@
 // src/pages/api/portfolio-values/[id].ts
 import type { APIRoute } from "astro";
-import { sql } from "@lib/db";
+import { sql, setRLSUser } from "@lib/db";
 
-export const GET: APIRoute = async ({ params }) => {
+export const GET: APIRoute = async ({ params, locals }) => {
   try {
+    const userId = locals.userId as string;
+    if (userId) {
+      await setRLSUser(userId);
+    }
+
     const { id } = params;
     const value = await sql`
       SELECT 
@@ -16,8 +21,9 @@ export const GET: APIRoute = async ({ params }) => {
       FROM portfolio_values pv
       JOIN accounts a ON pv.account_id = a.id
       WHERE pv.id = ${id}
+      ${userId ? sql`AND a.user_id = ${userId}` : sql``}
     `;
-    
+
     if (value.length === 0) {
       return new Response(JSON.stringify({ error: "Portfolio value not found" }), {
         status: 404,
@@ -37,8 +43,17 @@ export const GET: APIRoute = async ({ params }) => {
   }
 };
 
-export const PUT: APIRoute = async ({ params, request }) => {
+export const PUT: APIRoute = async ({ params, request, locals }) => {
   try {
+    const userId = locals.userId as string;
+    if (!userId) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+        status: 401,
+        headers: { "Content-Type": "application/json" }
+      });
+    }
+    await setRLSUser(userId);
+
     const { id } = params;
     const { account_id, date, value, currency } = await request.json();
 
@@ -56,6 +71,11 @@ export const PUT: APIRoute = async ({ params, request }) => {
       });
     }
 
+    // Verify ownership via account_id or existing record
+    // RLS should handle it if we set user_id, but we need to make sure we are updating a record that belongs to the user.
+    // The update query should implicitly check ownership if RLS is on.
+    // However, if we are changing account_id, we need to check if the new account_id belongs to the user.
+
     const result = await sql`
       UPDATE portfolio_values
       SET account_id = ${account_id}, date = ${date}, value = ${value}, currency = ${currency}
@@ -64,7 +84,7 @@ export const PUT: APIRoute = async ({ params, request }) => {
     `;
 
     if (result.length === 0) {
-      return new Response(JSON.stringify({ error: "Portfolio value not found" }), {
+      return new Response(JSON.stringify({ error: "Portfolio value not found or access denied" }), {
         status: 404,
         headers: { "Content-Type": "application/json" }
       });
@@ -82,8 +102,17 @@ export const PUT: APIRoute = async ({ params, request }) => {
   }
 };
 
-export const DELETE: APIRoute = async ({ params }) => {
+export const DELETE: APIRoute = async ({ params, locals }) => {
   try {
+    const userId = locals.userId as string;
+    if (!userId) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+        status: 401,
+        headers: { "Content-Type": "application/json" }
+      });
+    }
+    await setRLSUser(userId);
+
     const { id } = params;
     const result = await sql`
       DELETE FROM portfolio_values
@@ -92,7 +121,7 @@ export const DELETE: APIRoute = async ({ params }) => {
     `;
 
     if (result.length === 0) {
-      return new Response(JSON.stringify({ error: "Portfolio value not found" }), {
+      return new Response(JSON.stringify({ error: "Portfolio value not found or access denied" }), {
         status: 404,
         headers: { "Content-Type": "application/json" }
       });

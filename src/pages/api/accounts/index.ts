@@ -1,15 +1,25 @@
 // src/pages/api/accounts/index.ts
 import type { APIRoute } from "astro";
-import { sql } from "@lib/db";
+import { sql, setRLSUser } from "@lib/db";
 
-export const GET: APIRoute = async () => {
+export const GET: APIRoute = async ({ locals }) => {
   try {
+    const userId = locals.userId as string;
+    if (!userId) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+        status: 401,
+        headers: { "Content-Type": "application/json" }
+      });
+    }
+    await setRLSUser(userId);
+
     const accounts = await sql`
       SELECT id, name, type, currency 
       FROM accounts 
+      WHERE user_id = ${userId}
       ORDER BY id DESC
     `;
-    
+
     return new Response(JSON.stringify(accounts), {
       status: 200,
       headers: { "Content-Type": "application/json" }
@@ -22,10 +32,19 @@ export const GET: APIRoute = async () => {
   }
 };
 
-export const POST: APIRoute = async ({ request }) => {
+export const POST: APIRoute = async ({ request, locals }) => {
   try {
+    const userId = locals.userId as string;
+    if (!userId) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+        status: 401,
+        headers: { "Content-Type": "application/json" }
+      });
+    }
+    await setRLSUser(userId);
+
     const { name, type, currency } = await request.json();
-    
+
     if (!name || !type || !currency) {
       return new Response(JSON.stringify({ error: "Missing required fields" }), {
         status: 400,
@@ -41,8 +60,8 @@ export const POST: APIRoute = async ({ request }) => {
     }
 
     const result = await sql`
-      INSERT INTO accounts (name, type, currency)
-      VALUES (${name}, ${type}, ${currency})
+      INSERT INTO accounts (name, type, currency, user_id)
+      VALUES (${name}, ${type}, ${currency}, ${userId})
       RETURNING id, name, type, currency
     `;
 

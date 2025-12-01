@@ -1,21 +1,18 @@
 ---
 import Layout from "@layouts/default.astro";
-import { sql } from "@lib/db";
+import { sql, setRLSUser } from "@lib/db";
 
 const userId = Astro.locals.userId;
 
 if (!userId) {
-  // Asegúrate de que solo los usuarios logueados puedan acceder
   return Astro.redirect("/auth/login?returnTo=/dashboard/update-rate");
 }
 
-const role = await sql`SELECT role FROM users WHERE id = ${userId} limit 1`;
-console.log(role[0].role);
-
-// Obtener parámetro de período
 const url = new URL(Astro.request.url);
 const period = url.searchParams.get("period") || "30";
 const periodDays = parseInt(period);
+
+await setRLSUser(userId);
 
 // Obtener tasa de cambio actual
 const exchangeRate = await sql`
@@ -95,68 +92,146 @@ const calculateProjection = (values: number[], days: number) => {
   return slope * (n + days) + intercept;
 };
 
-// Calcular estadísticas por cuenta
+// ============================================
+// ROI DE PORTFOLIO TOTAL (sin transferencias internas)
+// ============================================
+const portfolioStartBalanceRes = await sql`
+  SELECT SUM(
+    CASE 
+      WHEN a.currency = 'USD' THEN t.new_value * COALESCE(t.usd_to_cop_rate, ${currentRate})
+      ELSE t.new_value 
+    END
+  ) as total
+  FROM (
+    SELECT DISTINCT ON (account_id) account_id, new_value, usd_to_cop_rate
+    FROM transactions 
+    WHERE user_id = ${userId} 
+    AND date < CURRENT_DATE - ${periodDays}::int * INTERVAL '1 day'
+    ORDER BY account_id, date DESC, id DESC
+  ) t
+  JOIN accounts a ON a.id = t.account_id
+  WHERE a.user_id = ${userId}
+`;
+const portfolioStartBalance = parseFloat(portfolioStartBalanceRes[0]?.total || 0);
+
+const portfolioCurrentBalanceRes = await sql`
+  SELECT SUM(
+    CASE 
+      WHEN a.currency = 'USD' THEN t.new_value * COALESCE(t.usd_to_cop_rate, ${currentRate})
+      ELSE t.new_value 
+    END
+  ) as total
+  FROM (
+    SELECT DISTINCT ON (account_id) account_id, new_value, usd_to_cop_rate
+    FROM transactions 
+    WHERE user_id = ${userId}
+    ORDER BY account_id, date DESC, id DESC
+  ) t
+  JOIN accounts a ON a.id = t.account_id
+  WHERE a.user_id = ${userId}
+`;
+const totalPortfolio = parseFloat(portfolioCurrentBalanceRes[0]?.total || 0);
+
+// Flujos EXTERNOS del portfolio (excluye transfer_in/transfer_out)
+const [portfolioContribsRes, portfolioWithdrawsRes] = await Promise.all([
+  sql`
+    SELECT SUM(
+      CASE 
+        WHEN currency = 'USD' THEN amount * COALESCE(usd_to_cop_rate, ${currentRate})
+        ELSE amount 
+      END
+    ) as total
+    FROM transactions 
+    WHERE type IN ('contribution', 'initial_balance')
+    AND user_id = ${userId}
+    AND date >= CURRENT_DATE - ${periodDays}::int * INTERVAL '1 day'
+  `,
+  sql`
+    SELECT SUM(
+      CASE 
+        WHEN currency = 'USD' THEN amount * COALESCE(usd_to_cop_rate, ${currentRate})
+        ELSE amount 
+      END
+    ) as total
+    FROM transactions 
+    WHERE type = 'withdrawal'
+    AND user_id = ${userId}
+    AND date >= CURRENT_DATE - ${periodDays}::int * INTERVAL '1 day'
+  `,
+]);
+
+const portfolioContribs = parseFloat(portfolioContribsRes[0]?.total || 0);
+const portfolioWithdraws = parseFloat(portfolioWithdrawsRes[0]?.total || 0);
+const portfolioNetFlow = portfolioContribs - portfolioWithdraws;
+
+const portfolioGain = totalPortfolio - portfolioStartBalance - portfolioNetFlow;
+const portfolioAverageCapital = portfolioStartBalance + (portfolioNetFlow / 2);
+const portfolioROI = portfolioAverageCapital > 0 ? (portfolioGain / portfolioAverageCapital) * 100 : 0;
+
+// ============================================
+// CALCULAR ESTADÍSTICAS POR CUENTA
+// ============================================
+// ============================================
+// ROI POR CUENTA - Métricas consolidadas correctas
+// ============================================
 const accountsWithStats = await Promise.all(
   allAccounts
     .filter((acc) => !acc.parent_account_id)
     .map(async (account) => {
+      // ========================================
+      // 1. OBTENER HISTORIAL DE LA CUENTA PADRE
+      // ========================================
       const history = await sql`
-                SELECT new_value, date 
-                FROM transactions 
-                WHERE account_id = ${account.id}
-                AND user_id = ${userId}
-                AND new_value IS NOT NULL
-                AND date >= CURRENT_DATE - ${periodDays}::int * INTERVAL '1 day'
-                ORDER BY date ASC
-            `;
+        SELECT new_value, date 
+        FROM transactions 
+        WHERE account_id = ${account.id}
+        AND user_id = ${userId}
+        AND new_value IS NOT NULL
+        AND date >= CURRENT_DATE - ${periodDays}::int * INTERVAL '1 day'
+        ORDER BY date ASC
+      `;
 
       const values = history.map((h) => Number(h.new_value));
       const currentValue = values[values.length - 1] || 0;
-      const initialValue = values.length > 1 ? values[0] : currentValue;
 
-      const metrics = calculateMetrics(values);
+      // Balance inicial de la cuenta padre
+      const startBalanceRes = await sql`
+        SELECT new_value FROM transactions 
+        WHERE account_id = ${account.id} 
+        AND user_id = ${userId} 
+        AND date < CURRENT_DATE - ${periodDays}::int * INTERVAL '1 day'
+        ORDER BY date DESC, id DESC 
+        LIMIT 1
+      `;
+      const startBalance = startBalanceRes.length > 0 ? Number(startBalanceRes[0].new_value) : 0;
 
-      // Obtener flujos del período
-      // NOTA: Excluimos 'initial_balance' aquí para no distorsionar el ROI si la cuenta es nueva
-      const [periodContribs, periodWithdraws] = await Promise.all([
-        sql`SELECT SUM(amount) as total FROM transactions WHERE account_id = ${account.id} AND user_id = ${userId} AND type = 'contribution' AND date >= CURRENT_DATE - ${periodDays}::int * INTERVAL '1 day'`,
-        sql`SELECT SUM(amount) as total FROM transactions WHERE account_id = ${account.id} AND user_id = ${userId} AND type = 'withdrawal' AND date >= CURRENT_DATE - ${periodDays}::int * INTERVAL '1 day'`,
+      // Flujos EXTERNOS de la cuenta padre
+      const [periodContribsExt, periodWithdrawsExt] = await Promise.all([
+        sql`
+          SELECT SUM(amount) as total 
+          FROM transactions 
+          WHERE account_id = ${account.id} 
+          AND user_id = ${userId} 
+          AND type IN ('contribution', 'initial_balance') 
+          AND date >= CURRENT_DATE - ${periodDays}::int * INTERVAL '1 day'
+        `,
+        sql`
+          SELECT SUM(amount) as total 
+          FROM transactions 
+          WHERE account_id = ${account.id} 
+          AND user_id = ${userId} 
+          AND type = 'withdrawal' 
+          AND date >= CURRENT_DATE - ${periodDays}::int * INTERVAL '1 day'
+        `,
       ]);
 
-      const contribs = parseFloat(periodContribs[0]?.total || 0);
-      const withdraws = parseFloat(periodWithdraws[0]?.total || 0);
-      const netFlow = contribs - withdraws;
+      const contribsExt = parseFloat(periodContribsExt[0]?.total || 0);
+      const withdrawsExt = parseFloat(periodWithdrawsExt[0]?.total || 0);
+      const netFlowExt = contribsExt - withdrawsExt;
 
-      // ROI Ajustado (Modified Dietz)
-      const gain = currentValue - initialValue;
-      const averageCapital = (initialValue + currentValue) / 2;
-      const roi = averageCapital > 0 ? (gain / averageCapital) * 100 : 0;
-
-      const projection3m = calculateProjection(values, 90);
-      const projection6m = calculateProjection(values, 180);
-      const projection12m = calculateProjection(values, 365);
-
-      const beta = 0.8 + Math.random() * 0.8;
-
-      let wins = 0;
-      for (let i = 1; i < values.length; i++) {
-        if (values[i] > values[i - 1]) wins++;
-      }
-      const winRate =
-        values.length > 1 ? (wins / (values.length - 1)) * 100 : 0;
-
-      let riskLevel = "bajo";
-      if (metrics.volatility > 30) riskLevel = "muy alto";
-      else if (metrics.volatility > 15) riskLevel = "alto";
-      else if (metrics.volatility > 8) riskLevel = "medio";
-
-      const trend =
-        projection3m > currentValue
-          ? "up"
-          : projection3m < currentValue
-            ? "down"
-            : "stable";
-
+      // ========================================
+      // 2. PROCESAR SUBCUENTAS
+      // ========================================
       const subaccounts = allAccounts.filter(
         (sub) => sub.parent_account_id === account.id,
       );
@@ -164,27 +239,52 @@ const accountsWithStats = await Promise.all(
       const subsWithStats = await Promise.all(
         subaccounts.map(async (sub) => {
           const subHistory = await sql`
-                      SELECT new_value FROM transactions 
-                      WHERE account_id = ${sub.id}
-                      AND user_id = ${userId}
-                      AND new_value IS NOT NULL
-                      AND date >= CURRENT_DATE - ${periodDays}::int * INTERVAL '1 day'
-                      ORDER BY date ASC
-
-                    `;
+            SELECT new_value, date FROM transactions 
+            WHERE account_id = ${sub.id}
+            AND user_id = ${userId}
+            AND new_value IS NOT NULL
+            AND date >= CURRENT_DATE - ${periodDays}::int * INTERVAL '1 day'
+            ORDER BY date ASC
+          `;
           const subValues = subHistory.map((h) => Number(h.new_value));
           const subCurrent = subValues[subValues.length - 1] || 0;
-          const subInitial = subValues[0] || subCurrent;
+
+          const subStartBalanceRes = await sql`
+            SELECT new_value FROM transactions 
+            WHERE account_id = ${sub.id} 
+            AND user_id = ${userId} 
+            AND date < CURRENT_DATE - ${periodDays}::int * INTERVAL '1 day'
+            ORDER BY date DESC, id DESC 
+            LIMIT 1
+          `;
+          const subStartBalance = subStartBalanceRes.length > 0 ? Number(subStartBalanceRes[0].new_value) : 0;
 
           const [subContribsRes, subWithdrawsRes] = await Promise.all([
-            sql`SELECT SUM(amount) as total FROM transactions WHERE account_id = ${sub.id} AND user_id = ${userId} AND type = 'contribution' AND date >= CURRENT_DATE - ${periodDays}::int * INTERVAL '1 day'`,
-            sql`SELECT SUM(amount) as total FROM transactions WHERE account_id = ${sub.id} AND user_id = ${userId} AND type = 'withdrawal' AND date >= CURRENT_DATE - ${periodDays}::int * INTERVAL '1 day'`,
+            sql`
+              SELECT SUM(amount) as total 
+              FROM transactions 
+              WHERE account_id = ${sub.id} 
+              AND user_id = ${userId} 
+              AND type IN ('contribution', 'initial_balance') 
+              AND date >= CURRENT_DATE - ${periodDays}::int * INTERVAL '1 day'
+            `,
+            sql`
+              SELECT SUM(amount) as total 
+              FROM transactions 
+              WHERE account_id = ${sub.id} 
+              AND user_id = ${userId} 
+              AND type = 'withdrawal' 
+              AND date >= CURRENT_DATE - ${periodDays}::int * INTERVAL '1 day'
+            `,
           ]);
 
-          const subGain = subCurrent - subInitial;
-          const subAvgCapital = (subInitial + subCurrent) / 2;
-          const subROI =
-            subAvgCapital > 0 ? (subGain / subAvgCapital) * 100 : 0;
+          const subContribs = parseFloat(subContribsRes[0]?.total || 0);
+          const subWithdraws = parseFloat(subWithdrawsRes[0]?.total || 0);
+          const subNetFlow = subContribs - subWithdraws;
+
+          const subGain = subCurrent - subStartBalance - subNetFlow;
+          const subAvgCapital = subStartBalance + subNetFlow / 2;
+          const subROI = subAvgCapital > 0 ? (subGain / subAvgCapital) * 100 : 0;
 
           const subMetrics = calculateMetrics(subValues);
 
@@ -197,75 +297,141 @@ const accountsWithStats = await Promise.all(
             sharpe: subMetrics.sharpe,
             subGain,
             subAvgCapital,
+            subNetFlow,
+            startBalance: subStartBalance,
+            historyValues: subValues, // Guardar para consolidar
+            historyDates: subHistory.map(h => h.date),
           };
         }),
       );
 
-      const currentValueCOP = toCOP(currentValue, account.currency);
-      const totalCurrentCOP =
-        currentValueCOP +
-        subsWithStats.reduce((sum, s) => sum + s.currentValueCOP, 0);
+      // ========================================
+      // 3. CREAR HISTORIAL CONSOLIDADO (padre + subcuentas)
+      // ========================================
+      // Obtener todas las fechas únicas
+// ========================================
+// 3. CREAR HISTORIAL CONSOLIDADO CON INTERPOLACIÓN DIARIA
+// ========================================
 
-      const gainCOP =
-        toCOP(gain, account.currency) +
-        subsWithStats.reduce(
-          (sum, s) => sum + toCOP(s.subGain || 0, s.currency),
-          0,
-        );
-      const averageCapitalCOP =
-        toCOP(averageCapital, account.currency) +
-        subsWithStats.reduce(
-          (sum, s) => sum + toCOP(s.subAvgCapital || 0, s.currency),
-          0,
-        );
+// Generar TODAS las fechas del período (no solo las que tienen transacciones)
+const startDate = new Date();
+startDate.setDate(startDate.getDate() - periodDays);
+const endDate = new Date();
 
-      return {
-        ...account,
-        currentValue,
-        initialValue,
-        currentValueCOP,
-        totalCurrentCOP,
-        roi,
-        volatility: metrics.volatility,
-        sharpe: metrics.sharpe,
-        maxDrawdown: metrics.maxDrawdown,
-        avgReturn: metrics.avgReturn,
-        beta,
-        winRate,
-        riskLevel,
-        projection3m,
-        projection6m,
-        projection12m,
-        trend,
-        subaccounts: subsWithStats,
-        historyLength: values.length,
-        gainCOP,
-        averageCapitalCOP,
-        allocation: 0,
-      };
-    }),
+const allDates = [];
+for (let d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + 1)) {
+  allDates.push(d.toISOString().split('T')[0]);
+}
+
+// Para cada fecha, obtener el valor del padre + subcuentas
+const consolidatedValues = allDates.map(dateStr => {
+  // Valor del padre: buscar la última transacción antes o igual a esta fecha
+  let parentValue = 0;
+  for (let i = history.length - 1; i >= 0; i--) {
+    const txDate = new Date(history[i].date).toISOString().split('T')[0];
+    if (txDate <= dateStr) {
+      parentValue = Number(history[i].new_value);
+      break;
+    }
+  }
+  
+  // Valor de subcuentas: última transacción antes o igual a esta fecha
+  const subsValue = subsWithStats.reduce((sum, sub) => {
+    if (sub.historyValues.length === 0) return sum;
+    
+    let subValue = 0;
+    for (let i = sub.historyValues.length - 1; i >= 0; i--) {
+      const txDate = new Date(sub.historyDates[i]).toISOString().split('T')[0];
+      if (txDate <= dateStr) {
+        subValue = sub.historyValues[i];
+        break;
+      }
+    }
+    return sum + subValue;
+  }, 0);
+  
+  return parentValue + subsValue;
+});
+
+// Filtrar valores cero al inicio (antes de cualquier transacción)
+const firstNonZeroIndex = consolidatedValues.findIndex(v => v > 0);
+const filteredValues = firstNonZeroIndex >= 0 
+  ? consolidatedValues.slice(firstNonZeroIndex) 
+  : consolidatedValues;
+
+// ========================================
+// 4. CALCULAR MÉTRICAS CONSOLIDADAS
+// ========================================
+const metrics = calculateMetrics(filteredValues);
+
+const totalCurrentValue = currentValue + subsWithStats.reduce((sum, s) => sum + s.currentValue, 0);
+const totalStartBalance = startBalance + subsWithStats.reduce((sum, s) => sum + s.startBalance, 0);
+const totalSubNetFlowExt = subsWithStats.reduce((sum, s) => sum + (s.subNetFlow || 0), 0);
+
+const totalGain = totalCurrentValue - totalStartBalance - netFlowExt - totalSubNetFlowExt;
+const totalAvgCapital = totalStartBalance + (netFlowExt + totalSubNetFlowExt) / 2;
+const consolidatedROI = totalAvgCapital > 0 ? (totalGain / totalAvgCapital) * 100 : 0;
+
+// Proyecciones basadas en valores consolidados DIARIOS
+const projection3m = calculateProjection(filteredValues, 90);
+const projection6m = calculateProjection(filteredValues, 180);
+const projection12m = calculateProjection(filteredValues, 365);
+
+const beta = 0.8 + Math.random() * 0.8;
+
+let wins = 0;
+for (let i = 1; i < filteredValues.length; i++) {
+  if (filteredValues[i] > filteredValues[i - 1]) wins++;
+}
+const winRate = filteredValues.length > 1 ? (wins / (filteredValues.length - 1)) * 100 : 0;
+
+let riskLevel = "bajo";
+if (metrics.volatility > 30) riskLevel = "muy alto";
+else if (metrics.volatility > 15) riskLevel = "alto";
+else if (metrics.volatility > 8) riskLevel = "medio";
+
+const trend =
+  projection3m > totalCurrentValue
+    ? "up"
+    : projection3m < totalCurrentValue
+      ? "down"
+      : "stable";
+
+const currentValueCOP = toCOP(currentValue, account.currency);
+const totalCurrentCOP =
+  currentValueCOP +
+  subsWithStats.reduce((sum, s) => sum + s.currentValueCOP, 0);
+
+const gainCOP = toCOP(totalGain, account.currency);
+const averageCapitalCOP = toCOP(totalAvgCapital, account.currency);
+
+return {
+  ...account,
+  currentValue: totalCurrentValue,
+  currentValueCOP,
+  totalCurrentCOP,
+  roi: consolidatedROI,
+  volatility: metrics.volatility,
+  sharpe: metrics.sharpe,
+  maxDrawdown: metrics.maxDrawdown,
+  avgReturn: metrics.avgReturn,
+  beta,
+  winRate,
+  riskLevel,
+  projection3m,
+  projection6m,
+  projection12m,
+  trend,
+  subaccounts: subsWithStats,
+  historyLength: filteredValues.length, // Ahora mostrará ~19 días en vez de 3
+  gainCOP,
+  averageCapitalCOP,
+  allocation: 0,
+};
+}),
 );
 
-// Calcular totales del portfolio
-const totalPortfolio = accountsWithStats.reduce(
-  (sum, acc) => sum + acc.totalCurrentCOP,
-  0,
-);
-const totalGainCOP = accountsWithStats.reduce(
-  (sum, acc) => sum + (acc.gainCOP || 0),
-  0,
-);
-const totalAverageCapitalCOP = accountsWithStats.reduce(
-  (sum, acc) => sum + (acc.averageCapitalCOP || 0),
-  0,
-);
-
-const portfolioROI =
-  totalAverageCapitalCOP > 0
-    ? (totalGainCOP / totalAverageCapitalCOP) * 100
-    : 0;
-
-// Calcular allocation
+// Calcular allocation y métricas del portfolio
 accountsWithStats.forEach((acc) => {
   acc.allocation =
     totalPortfolio > 0 ? (acc.totalCurrentCOP / totalPortfolio) * 100 : 0;
@@ -273,7 +439,6 @@ accountsWithStats.forEach((acc) => {
 
 accountsWithStats.sort((a, b) => b.totalCurrentCOP - a.totalCurrentCOP);
 
-// Top performers
 const topGainers = [...accountsWithStats]
   .filter((a) => a.roi > 0)
   .sort((a, b) => b.roi - a.roi)
@@ -284,7 +449,6 @@ const topLosers = [...accountsWithStats]
   .sort((a, b) => a.roi - b.roi)
   .slice(0, 3);
 
-// Métricas del portfolio
 const avgVolatility = accountsWithStats.reduce(
   (sum, acc) => sum + acc.volatility * (acc.allocation / 100),
   0,
@@ -298,62 +462,30 @@ const portfolioMaxDrawdown =
     ? Math.min(...accountsWithStats.map((a) => a.maxDrawdown))
     : 0;
 
-// Flujos del período
-// NOTA: Aquí SÍ incluimos 'initial_balance' para reflejar todo el dinero ingresado
-const [contributions, withdrawals] = await Promise.all([
-  sql`
-        SELECT COUNT(*) as count, 
-        SUM(
-            CASE 
-                WHEN currency = 'USD' THEN amount * COALESCE(usd_to_cop_rate, ${currentRate})
-                ELSE amount 
-            END
-        ) as total 
-        FROM transactions 
-        WHERE type IN ('contribution', 'initial_balance')
-        AND user_id = ${userId}
-        AND date >= CURRENT_DATE - ${periodDays}::int * INTERVAL '1 day'
-    `,
-  sql`
-        SELECT COUNT(*) as count, 
-        SUM(
-            CASE 
-                WHEN currency = 'USD' THEN amount * COALESCE(usd_to_cop_rate, ${currentRate})
-                ELSE amount 
-            END
-        ) as total 
-        FROM transactions 
-        WHERE type = 'withdrawal'
-        AND user_id = ${userId}
-        AND date >= CURRENT_DATE - ${periodDays}::int * INTERVAL '1 day'
-    `,
-]);
-
-const periodContributions = parseFloat(contributions[0]?.total || 0);
-const periodWithdrawals = parseFloat(withdrawals[0]?.total || 0);
-const netFlow = periodContributions - periodWithdrawals;
+const periodContributions = portfolioContribs;
+const periodWithdrawals = portfolioWithdraws;
+const netFlow = portfolioNetFlow;
 
 // Historial del portafolio
 const portfolioHistory = await sql`
   SELECT t.date,
-SUM(
-  CASE
-    WHEN a.currency = 'USD' THEN t.new_value * COALESCE(t.usd_to_cop_rate, ${currentRate})
-    ELSE t.new_value
-  END
-) AS total_value_cop
-FROM (
-  SELECT DISTINCT ON (account_id, date)
-  account_id, date, new_value, usd_to_cop_rate
-  FROM transactions
-  WHERE date >= CURRENT_DATE - ${periodDays}::int * INTERVAL '1 day'
-  AND user_id = ${userId}
-  ORDER BY account_id, date, id DESC
-) t
-JOIN accounts a ON a.id = t.account_id
-GROUP BY t.date
-ORDER BY t.date ASC;
-
+  SUM(
+    CASE
+      WHEN a.currency = 'USD' THEN t.new_value * COALESCE(t.usd_to_cop_rate, ${currentRate})
+      ELSE t.new_value
+    END
+  ) AS total_value_cop
+  FROM (
+    SELECT DISTINCT ON (account_id, date)
+    account_id, date, new_value, usd_to_cop_rate
+    FROM transactions
+    WHERE date >= CURRENT_DATE - ${periodDays}::int * INTERVAL '1 day'
+    AND user_id = ${userId}
+    ORDER BY account_id, date, id DESC
+  ) t
+  JOIN accounts a ON a.id = t.account_id
+  GROUP BY t.date
+  ORDER BY t.date ASC;
 `;
 
 const chartLabels = portfolioHistory.map((r) =>

@@ -23,7 +23,7 @@ const success = Astro.url.searchParams.get("success") || null;
 
       <form
         method="POST"
-        action={`/api/auth/register?returnTo=${safeReturnTo}`}
+        action={`/api/auth/register?returnTo=${encodeURIComponent("/auth/login")}`}
         class="space-y-4 sm:space-y-5"
       >
         <!-- Email -->

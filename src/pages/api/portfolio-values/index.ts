@@ -1,13 +1,18 @@
 // src/pages/api/portfolio-values/index.ts
 import type { APIRoute } from "astro";
-import { sql } from "@lib/db";
+import { sql, setRLSUser } from "@lib/db";
 import { registerAccountValue, getLatestExchangeRate, getAllAccountBalances } from "@lib/finance";
 
 /**
  * ✅ GET: Historial de valores (solo ajustes, ganancias, pérdidas, iniciales)
  */
-export const GET: APIRoute = async () => {
+export const GET: APIRoute = async ({ locals }) => {
   try {
+    const userId = locals.userId as string;
+    if (userId) {
+      await setRLSUser(userId);
+    }
+
     const values = await sql`
       SELECT 
         t.id,
@@ -25,6 +30,7 @@ export const GET: APIRoute = async () => {
       FROM transactions t
       JOIN accounts a ON t.account_id = a.id
       WHERE t.type IN ('adjustment', 'gain', 'loss', 'initial_balance')
+      ${userId ? sql`AND t.user_id = ${userId}` : sql``}
       ORDER BY t.date DESC, t.created_at DESC, a.name
     `;
 
@@ -55,6 +61,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
         headers: { Location: "/auth/login?returnTo=/dashboard/activity" },
       });
     }
+    await setRLSUser(userId);
 
     // Parsear JSON o FormData
     let data: any;

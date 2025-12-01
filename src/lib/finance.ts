@@ -1,15 +1,7 @@
-// src/lib/finance.ts - VERSIÓN CORREGIDA CON VALORES ORIGINALES
-import { neon } from '@neondatabase/serverless';
+// src/lib/finance.ts - VERSIÓN CORREGIDA
+import { sql, setRLSUser } from "@lib/db";
 
-const DATABASE_URL = import.meta.env.DATABASE_URL;
-if (!DATABASE_URL) {
-  throw new Error('DATABASE_URL is not defined');
-}
-export const sql = neon(DATABASE_URL);
 
-/**
- * Obtener la última tasa registrada
- */
 export async function getLatestExchangeRate() {
   const res = await sql`
     SELECT usd_to_cop, date
@@ -17,7 +9,7 @@ export async function getLatestExchangeRate() {
     ORDER BY date DESC
     LIMIT 1
   `;
-  if (!res.length) return null;
+  if (!res.length) return { usd_to_cop: 3000, date: "2025-11-29" };
   return { usd_to_cop: Number(res[0].usd_to_cop), date: res[0].date };
 }
 
@@ -25,12 +17,12 @@ export async function getLatestExchangeRate() {
  * ✅ CORREGIDO: Dashboard con valores originales preservados
  */
 export async function getDashboardData(userId: string) {
+  // ✅ ACTIVAR RLS
+  await setRLSUser(userId);
   // Obtener tasa actual
   const latestRate = await getLatestExchangeRate();
-  if (!latestRate) throw new Error("No hay tasa de cambio registrada");
-  
-  const currentRate = latestRate.usd_to_cop;
 
+  const currentRate = latestRate.usd_to_cop;
   // Obtener todas las cuentas
   const accountsRaw = await sql`
     SELECT 
@@ -76,16 +68,16 @@ export async function getDashboardData(userId: string) {
     if (!acc) return;
 
     const balanceNum = Number(t.new_value);
-    
+
     // Usar tasa histórica si existe, sino usar tasa actual
     const rateToUse = t.currency === "USD" && t.usd_to_cop_rate
       ? Number(t.usd_to_cop_rate)
       : currentRate;
-    
+
     // ✅ Guardar AMBOS valores
     acc.latest_value = balanceNum;  // Valor original (USD o COP)
-    acc.latest_value_cop = t.currency === "USD" 
-      ? balanceNum * rateToUse 
+    acc.latest_value_cop = t.currency === "USD"
+      ? balanceNum * rateToUse
       : balanceNum;
   });
 
@@ -100,11 +92,11 @@ export async function getDashboardData(userId: string) {
 
   // ✅ Calcular totales con subcuentas (en moneda original Y COP)
   let totalPortfolioCurrentCOP = 0;
-  
+
   accounts.forEach(acc => {
     let accTotalOriginal = acc.latest_value;
     let accTotalCOP = acc.latest_value_cop;
-    
+
     acc.subaccounts.forEach((sub: any) => {
       // Solo sumar subcuentas si están en la MISMA moneda
       if (sub.currency === acc.currency) {
@@ -112,7 +104,7 @@ export async function getDashboardData(userId: string) {
       }
       accTotalCOP += sub.latest_value_cop;
     });
-    
+
     acc.total_with_subs = accTotalOriginal;      // ✅ Total en moneda original
     acc.total_with_subs_cop = accTotalCOP;       // ✅ Total en COP
     totalPortfolioCurrentCOP += accTotalCOP;
@@ -123,7 +115,7 @@ export async function getDashboardData(userId: string) {
     SELECT *
     FROM transactions
     WHERE user_id = ${userId}
-    ORDER BY date ASC
+    ORDER BY created_at DESC
   `;
 
   // Calcular aportes y retiros
@@ -131,26 +123,26 @@ export async function getDashboardData(userId: string) {
   let totalWithdrawalsAllTime = 0;
   let monthlyContributions = 0;
   let monthlyWithdrawals = 0;
-  
+
   const now = new Date();
-  
+
   allTransactions.forEach(t => {
     const amountNum = Number(t.amount);
     const rateNum = t.usd_to_cop_rate ? Number(t.usd_to_cop_rate) : currentRate;
     const valueCOP = t.currency === "USD" ? amountNum * rateNum : amountNum;
 
     const tDate = new Date(t.date);
-    const isThisMonth = tDate.getMonth() === now.getMonth() && 
-                        tDate.getFullYear() === now.getFullYear();
+    const isThisMonth = tDate.getMonth() === now.getMonth() &&
+      tDate.getFullYear() === now.getFullYear();
 
-    // APORTES: initial_balance, contribution, transfer_in
-    if (['initial_balance', 'contribution', 'transfer_in'].includes(t.type)) {
+    // ✅ APORTES: initial_balance, contribution, income (EXCLUIR transfer_in)
+    if (['initial_balance', 'contribution', 'income'].includes(t.type)) {
       totalContributionsAllTime += valueCOP;
       if (isThisMonth) monthlyContributions += valueCOP;
     }
-    
-    // RETIROS: withdrawal, transfer_out, fee
-    if (['withdrawal', 'transfer_out', 'fee'].includes(t.type)) {
+
+    // ✅ RETIROS: withdrawal, expense, fee (EXCLUIR transfer_out)
+    if (['withdrawal', 'expense', 'fee'].includes(t.type)) {
       totalWithdrawalsAllTime += valueCOP;
       if (isThisMonth) monthlyWithdrawals += valueCOP;
     }
@@ -159,8 +151,8 @@ export async function getDashboardData(userId: string) {
   // Cálculo de retorno neto
   const investedCapital = totalContributionsAllTime - totalWithdrawalsAllTime;
   const netReturn = totalPortfolioCurrentCOP - investedCapital;
-  const returnPercentage = investedCapital > 0 
-    ? ((netReturn / investedCapital) * 100).toFixed(2) 
+  const returnPercentage = investedCapital > 0
+    ? ((netReturn / investedCapital) * 100).toFixed(2)
     : "0.00";
 
   // Distribución por moneda
@@ -172,7 +164,7 @@ export async function getDashboardData(userId: string) {
     }
     currencyDistributionMap[acc.currency] += value;
   });
-  
+
   const currencyDistribution = Object.entries(currencyDistributionMap)
     .map(([currency, total_value_cop]) => ({ currency, total_value_cop }));
 
@@ -221,6 +213,7 @@ export async function registerContribution(data: {
   notes?: string | null;
   usd_to_cop_rate?: number;
 }) {
+  await setRLSUser(data.user_id);
   const last = await sql`
     SELECT new_value
     FROM transactions
@@ -259,7 +252,7 @@ export async function registerContribution(data: {
     )
     RETURNING *
   `;
-  
+
   return result[0];
 }
 
@@ -278,6 +271,7 @@ export async function registerAccountValue(data: {
   user_id: string;
   usd_to_cop_rate?: number;
 }) {
+  await setRLSUser(data.user_id);
   let prev = data.previous_value;
   if (typeof prev === 'undefined' || prev === null) {
     const last = await sql`
@@ -292,7 +286,7 @@ export async function registerAccountValue(data: {
 
   let newVal = data.new_value;
   if (typeof newVal === 'undefined' || newVal === null) {
-    if (['withdrawal', 'transfer_out', 'fee', 'loss'].includes(data.type)) {
+    if (['withdrawal', 'transfer_out', 'fee', 'loss', 'expense'].includes(data.type)) {
       newVal = prev - Number(data.amount);
     } else {
       newVal = prev + Number(data.amount);
@@ -334,6 +328,7 @@ export async function registerAccountValue(data: {
  * Obtener todos los balances del usuario
  */
 export async function getAllAccountBalances(userId: string) {
+  await setRLSUser(userId);
   return await sql`
     SELECT 
       a.id AS account_id,

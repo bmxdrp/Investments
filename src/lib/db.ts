@@ -16,3 +16,7 @@ export function asRows<T = any>(result: any): T[] {
   // Fallback seguro
   return [] as T[];
 }
+
+export async function setRLSUser(userId: string) {
+  await sql.unsafe(`SET app.user_id = '${userId}'`);
+}

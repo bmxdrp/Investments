@@ -1,16 +1,25 @@
 // src/pages/api/accounts/[id].ts
 import type { APIRoute } from "astro";
-import { sql } from "@lib/db";
+import { sql, setRLSUser } from "@lib/db";
 
-export const GET: APIRoute = async ({ params }) => {
+export const GET: APIRoute = async ({ params, locals }) => {
   try {
+    const userId = locals.userId as string;
+    if (!userId) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+        status: 401,
+        headers: { "Content-Type": "application/json" }
+      });
+    }
+    await setRLSUser(userId);
+
     const { id } = params;
     const account = await sql`
       SELECT id, name, type, currency 
       FROM accounts 
-      WHERE id = ${id}
+      WHERE id = ${id} AND user_id = ${userId}
     `;
-    
+
     if (account.length === 0) {
       return new Response(JSON.stringify({ error: "Account not found" }), {
         status: 404,
@@ -30,8 +39,17 @@ export const GET: APIRoute = async ({ params }) => {
   }
 };
 
-export const PUT: APIRoute = async ({ params, request }) => {
+export const PUT: APIRoute = async ({ params, request, locals }) => {
   try {
+    const userId = locals.userId as string;
+    if (!userId) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+        status: 401,
+        headers: { "Content-Type": "application/json" }
+      });
+    }
+    await setRLSUser(userId);
+
     const { id } = params;
     const { name, type, currency } = await request.json();
 
@@ -52,7 +70,7 @@ export const PUT: APIRoute = async ({ params, request }) => {
     const result = await sql`
       UPDATE accounts 
       SET name = ${name}, type = ${type}, currency = ${currency}
-      WHERE id = ${id}
+      WHERE id = ${id} AND user_id = ${userId}
       RETURNING id, name, type, currency
     `;
 
@@ -75,12 +93,21 @@ export const PUT: APIRoute = async ({ params, request }) => {
   }
 };
 
-export const DELETE: APIRoute = async ({ params }) => {
+export const DELETE: APIRoute = async ({ params, locals }) => {
   try {
+    const userId = locals.userId as string;
+    if (!userId) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+        status: 401,
+        headers: { "Content-Type": "application/json" }
+      });
+    }
+    await setRLSUser(userId);
+
     const { id } = params;
     const result = await sql`
       DELETE FROM accounts 
-      WHERE id = ${id}
+      WHERE id = ${id} AND user_id = ${userId}
       RETURNING id
     `;
 

@@ -1,6 +1,6 @@
 // /api/graphics/index.ts - versión totalmente corregida y robusta
 import type { APIRoute } from "astro";
-import { sql, asRows } from "@lib/db";
+import { sql, asRows, setRLSUser } from "@lib/db";
 
 function safeNumber(v: any) {
   const n = Number(v);
@@ -13,12 +13,23 @@ function formatDateToYMD(d: any) {
   return date.toISOString().slice(0, 10);
 }
 
-export const GET: APIRoute = async ({ url }) => {
+export const GET: APIRoute = async ({ url, locals }) => {
   try {
     const type = (url.searchParams.get("type") || "diversificacion").toString();
-    // optional user filter (if you want per-user charts) - pass ?userId=...
-    const userIdParam = url.searchParams.get("userId");
-    const userId = userIdParam ? Number(userIdParam) : undefined;
+
+    // Use authenticated user if available
+    const authUserId = locals.userId as string;
+    let userId = authUserId;
+
+    // If no auth user, check query param (legacy/public?) - but RLS might block it if not set
+    if (!userId) {
+      const userIdParam = url.searchParams.get("userId");
+      if (userIdParam) userId = userIdParam;
+    }
+
+    if (userId) {
+      await setRLSUser(userId);
+    }
 
     // Latest FX
     const rateRows = asRows<{ usd_to_cop: number }>(
@@ -112,7 +123,7 @@ export const GET: APIRoute = async ({ url }) => {
 
       chartConfig = {
         type: "line",
-        data: { labels, datasets: [{ label: "Aportes (COP)", steppedLine: true, borderColor: 'rgb(255, 99, 132)',fill: false,data }] },
+        data: { labels, datasets: [{ label: "Aportes (COP)", steppedLine: true, borderColor: 'rgb(255, 99, 132)', fill: false, data }] },
         options: { plugins: { title: { display: true, text: "Aportes por fecha (COP)" } } },
       };
     }

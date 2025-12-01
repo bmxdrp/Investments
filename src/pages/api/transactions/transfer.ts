@@ -1,136 +1,249 @@
 // src/pages/api/transactions/transfer.ts
 import type { APIRoute } from "astro";
 import { sql } from "@lib/db";
-import { getLatestExchangeRate } from "@lib/finance";
 
 export const POST: APIRoute = async ({ request, locals }) => {
   try {
     const userId = locals.userId;
     if (!userId) {
-      return new Response(null, {
-        status: 302,
-        headers: { Location: "/auth/login?returnTo=/dashboard/transfer" },
+      return new Response("No autorizado", { status: 401 });
+    }
+
+    // ✅ USAMOS FORMDATA (NO JSON)
+    const formData = await request.formData();
+
+    const from_account_id = Number(formData.get("from_account_id"));
+    const to_account_id = Number(formData.get("to_account_id"));
+    const amount = Number(formData.get("amount"));
+    const date =
+      String(formData.get("date")) ||
+      new Date().toISOString().slice(0, 10);
+    const notes = String(formData.get("notes") || "") || null;
+    const usd_to_cop = Number(formData.get("usd_to_cop")) || 4000;
+
+    if (!from_account_id || !to_account_id || amount <= 0) {
+      return new Response("Datos inválidos", { status: 400 });
+    }
+
+    if (from_account_id === to_account_id) {
+      return new Response("No puedes transferir a la misma cuenta", {
+        status: 400,
       });
     }
 
-    const formData = await request.formData();
-    const fromAccountId = Number(formData.get("from_account_id"));
-    const toAccountId = Number(formData.get("to_account_id"));
-    const amount = Number(formData.get("amount")); // Monto en moneda de origen
-    const date = String(formData.get("date")) || new Date().toISOString().slice(0, 10);
-    const description = String(formData.get("note") || "") || null;
+    /* ================================
+       1️⃣ INICIAR TRANSACCIÓN
+    ================================== */
+    await sql`BEGIN`;
 
-    // 1. Validaciones Básicas
-    if (!fromAccountId || !toAccountId || !amount || amount <= 0) {
-      throw new Error("Datos inválidos");
-    }
-
-    if (fromAccountId === toAccountId) {
-      throw new Error("La cuenta de origen y destino no pueden ser la misma");
-    }
-
-    // 2. Obtener información de las cuentas
-    const accounts = await sql`
-      SELECT id, currency, name 
-      FROM accounts 
-      WHERE id IN (${fromAccountId}, ${toAccountId}) AND user_id = ${userId}
+    /* ================================
+       2️⃣ OBTENER CUENTAS (✅ MONEDA REAL)
+    ================================== */
+    const [fromAccount] = await sql`
+      SELECT id, name, currency
+      FROM accounts
+      WHERE id = ${from_account_id}
+        AND user_id = ${userId}
     `;
 
-    const fromAccount = accounts.find(a => a.id === fromAccountId);
-    const toAccount = accounts.find(a => a.id === toAccountId);
+    const [toAccount] = await sql`
+      SELECT id, name, currency
+      FROM accounts
+      WHERE id = ${to_account_id}
+        AND user_id = ${userId}
+    `;
 
     if (!fromAccount || !toAccount) {
-      throw new Error("Una de las cuentas no existe o no te pertenece");
+      await sql`ROLLBACK`;
+      return new Response("Cuenta no encontrada", { status: 404 });
     }
 
-    // 3. Obtener tasa de cambio actual
-    const latestRate = await getLatestExchangeRate();
-    const currentUsdRate = latestRate?.usd_to_cop || 4000; // Fallback seguro
-
-    // 4. Calcular monto de destino (Conversión de Divisas)
-    let finalAmount = amount;
-    let exchangeRateUsed = null;
-
-    if (fromAccount.currency !== toAccount.currency) {
-      if (fromAccount.currency === 'USD' && toAccount.currency === 'COP') {
-        // USD -> COP
-        finalAmount = amount * currentUsdRate;
-        exchangeRateUsed = currentUsdRate;
-      } else if (fromAccount.currency === 'COP' && toAccount.currency === 'USD') {
-        // COP -> USD
-        finalAmount = amount / currentUsdRate;
-        exchangeRateUsed = currentUsdRate;
-      }
-    }
-
-    // 5. Obtener balances anteriores
-    const lastFrom = await sql`
-      SELECT new_value FROM transactions 
-      WHERE account_id = ${fromAccountId} 
-      ORDER BY date DESC, created_at DESC, id DESC LIMIT 1
+    /* ================================
+       3️⃣ OBTENER BALANCE ACTUAL REAL ✅
+    ================================== */
+    const [fromBalanceRow] = await sql`
+      SELECT COALESCE(new_value, 0) AS balance
+      FROM transactions
+      WHERE account_id = ${from_account_id}
+      AND user_id = ${userId}
+      ORDER BY updated_at DESC, id DESC
+      LIMIT 1
     `;
-    const prevFrom = lastFrom.length ? Number(lastFrom[0].new_value) : 0;
 
-    const lastTo = await sql`
-      SELECT new_value FROM transactions 
-      WHERE account_id = ${toAccountId} 
-      ORDER BY date DESC, created_at DESC, id DESC LIMIT 1
-    `;
-    const prevTo = lastTo.length ? Number(lastTo[0].new_value) : 0;
+    const currentBalanceFrom = Number(fromBalanceRow?.balance || 0);
 
-    // Validar fondos suficientes
-    if (prevFrom < amount) {
-      throw new Error(`Fondos insuficientes en ${fromAccount.name}. Disponible: ${prevFrom} ${fromAccount.currency}`);
+    /* ================================
+       4️⃣ VALIDACIÓN REAL DE FONDOS ✅
+    ================================== */
+    if (currentBalanceFrom < amount) {
+      await sql`ROLLBACK`;
+      return new Response(
+        `Fondos insuficientes en ${fromAccount.name}. Disponible: ${currentBalanceFrom} ${fromAccount.currency}`,
+        { status: 400 }
+      );
     }
 
-    // 6. Ejecutar Transacción (Atomicidad simulada)
-    // Insertar Salida (Transfer Out)
-    const outResult = await sql`
+    /* ================================
+       5️⃣ BASE PARA RECONSTRUIR HISTÓRICO
+    ================================== */
+    const [baseFrom] = await sql`
+      SELECT COALESCE(new_value, 0) AS value
+      FROM transactions
+      WHERE account_id = ${from_account_id}
+        AND user_id = ${userId}
+        AND date < ${date}
+      ORDER BY date DESC, created_at DESC, id DESC
+      LIMIT 1
+    `;
+
+    const [baseTo] = await sql`
+      SELECT COALESCE(new_value, 0) AS value
+      FROM transactions
+      WHERE account_id = ${to_account_id}
+        AND user_id = ${userId}
+        AND date < ${date}
+      ORDER BY date DESC, created_at DESC, id DESC
+      LIMIT 1
+    `;
+
+    const previousFrom = Number(baseFrom?.value || 0);
+    const previousTo = Number(baseTo?.value || 0);
+
+    const newFromValue = previousFrom - amount;
+    const newToValue = previousTo + amount;
+
+    /* ================================
+       6️⃣ INSERTAR TRANSFER_OUT ✅
+    ================================== */
+    const [fromTx] = await sql`
       INSERT INTO transactions (
-        user_id, account_id, type, amount, currency, date, description,
-        previous_value, new_value, related_account_id, usd_to_cop_rate, created_at
+        account_id,
+        type,
+        amount,
+        currency,
+        date,
+        notes,
+        previous_value,
+        new_value,
+        usd_to_cop_rate,
+        user_id
+
       ) VALUES (
-        ${userId}, ${fromAccountId}, 'transfer_out', ${amount}, ${fromAccount.currency}, ${date}, 
-        ${description || `Transferencia a ${toAccount.name}`},
-        ${prevFrom}, ${prevFrom - amount}, ${toAccountId}, ${exchangeRateUsed}, NOW()
+        ${from_account_id},
+        'transfer_out',
+        ${amount},
+        ${fromAccount.currency},  -- ✅ MONEDA REAL
+        ${date},
+        ${notes},
+        ${previousFrom},
+        ${newFromValue},
+        ${usd_to_cop},
+        ${userId}
       )
       RETURNING id
     `;
-    const outId = outResult[0].id;
 
-    // Insertar Entrada (Transfer In)
-    const inResult = await sql`
+    /* ================================
+       7️⃣ INSERTAR TRANSFER_IN ✅
+    ================================== */
+    const [toTx] = await sql`
       INSERT INTO transactions (
-        user_id, account_id, type, amount, currency, date, description,
-        previous_value, new_value, related_account_id, related_transaction_id, usd_to_cop_rate, created_at
+        account_id,
+        type,
+        amount,
+        currency,
+        date,
+        notes,
+        previous_value,
+        new_value,
+        user_id,
+        usd_to_cop_rate,
+        related_transaction_id
       ) VALUES (
-        ${userId}, ${toAccountId}, 'transfer_in', ${finalAmount}, ${toAccount.currency}, ${date}, 
-        ${description || `Transferencia desde ${fromAccount.name}`},
-        ${prevTo}, ${prevTo + finalAmount}, ${fromAccountId}, ${outId}, ${exchangeRateUsed}, NOW()
+        ${to_account_id},
+        'transfer_in',
+        ${amount},
+        ${toAccount.currency},  -- ✅ MONEDA REAL
+        ${date},
+        ${notes},
+        ${previousTo},
+        ${newToValue},
+        ${userId},
+        ${usd_to_cop},
+        ${fromTx.id}
       )
       RETURNING id
     `;
-    const inId = inResult[0].id;
 
-    // Actualizar referencia cruzada en la salida
     await sql`
-      UPDATE transactions 
-      SET related_transaction_id = ${inId} 
-      WHERE id = ${outId}
+      UPDATE transactions
+      SET related_transaction_id = ${toTx.id}
+      WHERE id = ${fromTx.id}
+      AND user_id = ${userId}
     `;
 
-    return new Response(null, {
-      status: 302,
-      headers: { Location: "/admin/transfer?success=1" },
-    });
+    /* ================================
+       8️⃣ RECÁLCULO ROBUSTO ✅
+    ================================== */
+    const recalcAccount = async (accountId: number) => {
+      const txs = await sql`
+        SELECT id, amount, type
+        FROM transactions
+        WHERE account_id = ${accountId}
+          AND user_id = ${userId}
+          AND date >= ${date}
+        ORDER BY date ASC, created_at ASC, id ASC
+      `;
 
-  } catch (err: any) {
-    console.error("Transfer Error:", err);
-    return new Response(null, {
-      status: 302,
-      headers: {
-        Location: "/admin/transfer?error=" + encodeURIComponent(err.message || "Error en la transferencia"),
-      },
-    });
+      const [startBase] = await sql`
+        SELECT COALESCE(new_value, 0) AS value
+        FROM transactions
+        WHERE account_id = ${accountId}
+          AND user_id = ${userId}
+          AND date < ${date}
+        ORDER BY date DESC, created_at DESC, id DESC
+        LIMIT 1
+      `;
+
+      let running = Number(startBase?.value || 0);
+
+      for (const tx of txs) {
+        const amt = Number(tx.amount);
+        const prev = running;
+
+        if (
+          tx.type === "contribution" ||
+          tx.type === "transfer_in" ||
+          tx.type === "initial_balance"
+        ) {
+          running += amt;
+        } else {
+          running -= amt;
+        }
+
+        await sql`
+          UPDATE transactions
+          SET previous_value = ${prev},
+              new_value = ${running}
+          WHERE id = ${tx.id}
+          AND user_id = ${userId}
+        `;
+      }
+    };
+
+    await recalcAccount(from_account_id);
+    await recalcAccount(to_account_id);
+
+    /* ================================
+       9️⃣ COMMIT FINAL ✅
+    ================================== */
+    await sql`COMMIT`;
+
+    return new Response(null, { status: 302, headers: { Location: "/admin/transfer?success=1" } });
+
+  } catch (error: any) {
+    console.error("Transfer Error:", error);
+    await sql`ROLLBACK`;
+    return new Response(error.message, { status: 302, headers: { Location: `/admin/transfer?error=${error.message}` } });
   }
 };

@@ -7,6 +7,7 @@ const userId = Astro.locals.userId;
 if (!userId) {
   return Astro.redirect("/auth/login?returnTo=/dashboard/activity");
 }
+await sql.unsafe(`SET app.user_id = '${userId}'`);
 
 // Obtener tasa de cambio actual
 const latestRate = await sql`
@@ -17,7 +18,7 @@ const latestRate = await sql`
 `;
 const currentRate = latestRate.length > 0 ? Number(latestRate[0].usd_to_cop) : 1;
 
-// ✅ Obtener todas las cuentas con su último valor desde TRANSACTIONS
+// ✅ Obtener todas las cuentas con su último valor desde TRANSACTIONS (CUALQUIER TIPO)
 const accountsWithValues = await sql`
   SELECT 
     a.id,
@@ -31,9 +32,8 @@ const accountsWithValues = await sql`
         SELECT t.new_value
         FROM transactions t
         WHERE t.account_id = a.id
-          AND t.type IN ('adjustment', 'initial_balance', 'gain', 'loss')
           AND t.user_id = ${userId}
-        ORDER BY t.date DESC, t.created_at DESC
+        ORDER BY t.date DESC, t.created_at DESC, t.id DESC
         LIMIT 1
       ),
       0
@@ -44,8 +44,7 @@ const accountsWithValues = await sql`
         SELECT t.date
         FROM transactions t
         WHERE t.account_id = a.id
-          AND t.type IN ('adjustment', 'initial_balance', 'gain', 'loss')
-        ORDER BY t.date DESC, t.created_at DESC
+        ORDER BY t.date DESC, t.created_at DESC, t.id DESC
         LIMIT 1
       ),
       CURRENT_DATE

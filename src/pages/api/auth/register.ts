@@ -10,8 +10,10 @@ const registerSchema = z.object({
   password_confirm: z.string().min(6),
 });
 
-export const POST: APIRoute = async ({ request }) => {
+export const POST: APIRoute = async ({ request}) => {
   try {
+    // Generar UUID como id
+    const id = randomUUID();
     const form = Object.fromEntries(await request.formData());
     const parsed = registerSchema.parse(form);
 
@@ -20,7 +22,6 @@ export const POST: APIRoute = async ({ request }) => {
         status: 400,
       });
     }
-
     // Verificar si ya existe
     const existing = await sql`
       SELECT id FROM users WHERE email = ${parsed.email}
@@ -31,19 +32,15 @@ export const POST: APIRoute = async ({ request }) => {
     return Response.redirect(new URL("/auth/register?error=" + encodeURIComponent("El correo ya está registrado"), request.url), 303);
     }
 
-    // Generar UUID como id
-    const id = randomUUID();
-
     // Encriptar contraseña
     const password_hash = await argon2.hash(parsed.password);
 
     // Insertar usuario
-    const user = await sql`
-      INSERT INTO users (id, email, password_hash, role)
-      VALUES (${id}, ${parsed.email}, ${password_hash}, 'common_user')
-      RETURNING id, email;
+    await sql.unsafe(`SET app.user_id = '${id}'`);
+    await sql`
+      INSERT INTO users (id, email, password_hash)
+      VALUES (${id}, ${parsed.email}, ${password_hash});
     `;
-
     return Response.redirect(new URL("/auth/register?success=1", request.url), 303);
 
   } catch (err) {

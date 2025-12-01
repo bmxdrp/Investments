@@ -2,7 +2,7 @@ import { defineMiddleware } from "astro:middleware";
 import { sql } from "@lib/db";
 
 const PROTECTED_ROUTES = ["/admin", "/api"];
-const UNPROTECTED_ROUTES = ["/api/auth/login", "/api/cron"];
+const UNPROTECTED_ROUTES = ["/api/auth/login","/api/auth/register", "/api/cron"];
 
 // Cache de sesiones para reducir consultas a DB
 const sessionCache = new Map<string, { userId: string; expiresAt: Date }>();

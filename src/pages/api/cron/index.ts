@@ -1,10 +1,5 @@
 import type { APIRoute } from "astro";
 import { sql } from "@lib/db";
-import {
-  getTotalContributions,
-  getTotalWithdrawals,
-  getPortfolioValueCOPOptimized,
-} from "@lib/utils";
 
 export const GET: APIRoute = async () => {
   const summary: Record<string, any> = {};
@@ -37,13 +32,52 @@ export const GET: APIRoute = async () => {
         usd_to_cop = ${rate};
     `;
 
-    const usdToCop = rate;
+    const usdToCop = Number(rate);
     summary.usdToCopRate = usdToCop;
 
-    // 2️⃣ Calculate net return
-    const totalContributions = await getTotalContributions(sql, usdToCop);
-    const totalWithdrawals = await getTotalWithdrawals(sql, usdToCop);
-    const currentPortfolioValue = await getPortfolioValueCOPOptimized(sql);
+    // 2️⃣ Calculate Global Metrics using 'transactions' table
+
+    // Fetch all transactions for contributions/withdrawals calculation
+    const allTransactions = await sql`
+      SELECT type, amount, currency, usd_to_cop_rate, date
+      FROM transactions
+    `;
+
+    let totalContributions = 0;
+    let totalWithdrawals = 0;
+
+    for (const t of allTransactions) {
+      const amount = Number(t.amount);
+      // Use historical rate for past transactions if available, else current
+      const txRate = t.currency === 'USD' && t.usd_to_cop_rate ? Number(t.usd_to_cop_rate) : usdToCop;
+      const valueCOP = t.currency === 'USD' ? amount * txRate : amount;
+
+      if (['initial_balance', 'contribution', 'transfer_in'].includes(t.type)) {
+        totalContributions += valueCOP;
+      } else if (['withdrawal', 'transfer_out', 'fee'].includes(t.type)) {
+        totalWithdrawals += valueCOP;
+      }
+    }
+
+    // Fetch latest balance for each account for Portfolio Value
+    const latestBalances = await sql`
+      SELECT DISTINCT ON (account_id) account_id, new_value, currency
+      FROM transactions
+      ORDER BY account_id, date DESC, created_at DESC, id DESC
+    `;
+
+    let currentPortfolioValue = 0;
+    const accountBalancesMap = new Map();
+
+    for (const b of latestBalances) {
+      const val = Number(b.new_value);
+      accountBalancesMap.set(b.account_id, { value: val, currency: b.currency });
+
+      // For current portfolio value, use CURRENT rate
+      const valCOP = b.currency === 'USD' ? val * usdToCop : val;
+      currentPortfolioValue += valCOP;
+    }
+
     const netReturn = currentPortfolioValue + totalWithdrawals - totalContributions;
     const returnPercentage = totalContributions > 0 ? (netReturn / totalContributions) * 100 : 0;
 
@@ -82,14 +116,10 @@ export const GET: APIRoute = async () => {
     `;
     let savedCount = 0;
     for (const account of accounts) {
-      const latestValue = await sql`
-        SELECT value, currency FROM portfolio_values
-        WHERE account_id = ${account.id}
-        ORDER BY date DESC
-        LIMIT 1;
-      `;
-      const value = latestValue.length > 0 ? parseFloat(String(latestValue[0].value)) : 0;
-      const currency = latestValue.length > 0 ? latestValue[0].currency : account.currency;
+      // Get balance from our map or 0
+      const balanceData = accountBalancesMap.get(account.id) || { value: 0, currency: account.currency };
+      const value = balanceData.value;
+      const currency = balanceData.currency;
       const valueCOP = currency === "USD" ? value * usdToCop : value;
 
       await sql`

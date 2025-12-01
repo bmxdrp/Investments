@@ -1,6 +1,6 @@
 ---
 import Layout from "@layouts/default.astro";
-import { sql } from "@lib/db";
+import { sql, setRLSUser } from "@lib/db";
 import { getLatestExchangeRate } from "@lib/finance";
 
 const userId = Astro.locals.userId;
@@ -8,26 +8,37 @@ if (!userId) {
     return Astro.redirect("/auth/login?returnTo=/dashboard/transfer");
 }
 
+setRLSUser(userId);
 // Obtener cuentas con saldo actual
 const accounts = await sql`
   SELECT 
-    a.id, 
-    a.name, 
-    a.currency, 
-    a.type,
-    COALESCE(
-      (SELECT new_value FROM transactions t 
-       WHERE t.account_id = a.id 
-       ORDER BY t.date DESC, t.created_at DESC, t.id DESC LIMIT 1), 
-      0
-    ) as balance
-  FROM accounts a
-  WHERE a.user_id = ${userId}
-  ORDER BY a.name ASC
+  a.id, 
+  a.name, 
+  a.currency, 
+  a.type,
+  COALESCE(tx.new_value, 0) AS balance
+FROM accounts a
+LEFT JOIN LATERAL (
+  SELECT new_value
+  FROM transactions t
+  WHERE t.account_id = a.id
+  AND t.user_id = ${userId}
+  ORDER BY 
+    t.date ASC,
+    CASE 
+      WHEN t.type = 'initial_balance' THEN 1
+      ELSE 0
+    END,
+
+    t.created_at DESC,
+    t.id DESC
+  LIMIT 1
+) tx ON true
+ORDER BY a.name ASC;
 `;
 
 const latestRate = await getLatestExchangeRate();
-const currentRate = latestRate?.usd_to_cop || 0;
+const currentRate = latestRate?.usd_to_cop || 4000;
 
 const today = new Date()
     .toLocaleDateString("es-CO", {
@@ -104,6 +115,7 @@ const today = new Date()
                 class="p-6 space-y-6"
                 id="transferForm"
             >
+                <input type="hidden" name="usd_to_cop" value={currentRate} />
                 <!-- Cuentas -->
                 <div
                     class="grid grid-cols-1 md:grid-cols-[1fr_auto_1fr] gap-3 md:gap-6 items-end"
@@ -336,6 +348,25 @@ const today = new Date()
         const estimatedResult = document.getElementById("estimatedResult");
         const swapBtn = document.getElementById("swapAccountsBtn");
 
+        document.getElementById("transferForm").addEventListener("submit", (e) => {
+    if (fromSelect.value === toSelect.value) {
+        e.preventDefault();
+        alert("La cuenta de origen y destino no pueden ser la misma.");
+        return;
+    }
+
+    const fromOption = fromSelect.selectedOptions[0];
+    const balance = parseFloat(fromOption?.dataset.balance || "0");
+    const amount = parseFloat(amountInput.value || "0");
+
+    if (amount > balance) {
+        e.preventDefault();
+        alert("Fondos insuficientes en la cuenta de origen.");
+        return;
+    }
+});
+
+
         // Función para actualizar opciones disponibles
         function updateOptions() {
             const fromVal = fromSelect.value;
@@ -384,8 +415,10 @@ const today = new Date()
                 if (
                     toOption &&
                     toOption.value &&
-                    fromCurrency !== toOption.dataset.currency
-                ) {
+                    fromCurrency !== toOption.dataset.currency &&
+                    parseFloat(amountInput.value || "0") > 0
+                    )
+                    {
                     const amount = parseFloat(amountInput.value) || 0;
                     const toCurrency = toOption.dataset.currency;
                     let result = 0;
@@ -407,21 +440,29 @@ const today = new Date()
         }
 
         // Evento de Intercambio
-        swapBtn.addEventListener("click", () => {
-            const tempVal = fromSelect.value;
-            fromSelect.value = toSelect.value;
+swapBtn.addEventListener("click", () => {
+    const fromVal = fromSelect.value;
+    const toVal = toSelect.value;
 
-            // Necesitamos habilitar temporalmente la opción en el destino para poder seleccionarla
-            const targetOption = toSelect.querySelector(
-                `option[value="\${tempVal}"]`,
-            );
-            if (targetOption) {
-                targetOption.disabled = false;
-                targetOption.hidden = false;
-            }
-            toSelect.value = tempVal;
+    fromSelect.value = toVal;
+    toSelect.value = fromVal;
 
-            updateUI();
+    // Rehabilitar todas las opciones antes de filtrar
+    Array.from(fromSelect.options).forEach(opt => {
+        opt.disabled = false;
+        opt.hidden = false;
+    });
+    Array.from(toSelect.options).forEach(opt => {
+        opt.disabled = false;
+        opt.hidden = false;
+    });
+
+    updateUI();
+
+    swapBtn.classList.add("rotate-180");
+    setTimeout(() => swapBtn.classList.remove("rotate-180"), 300);
+});
+
 
             // Animación visual
             swapBtn.classList.add("rotate-180");
@@ -431,6 +472,8 @@ const today = new Date()
         fromSelect.addEventListener("change", updateUI);
         toSelect.addEventListener("change", updateUI);
         amountInput.addEventListener("input", updateUI);
+        currencyLabel.textContent = "---";
+        balanceInfo.textContent = "Selecciona una cuenta de origen";
 
         // Inicializar estado
         updateOptions();

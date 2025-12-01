@@ -1,6 +1,6 @@
 // src/pages/api/transactions/withdraw.ts
 import type { APIRoute } from "astro";
-import { sql } from "@lib/db";
+import { sql, setRLSUser } from "@lib/db";
 import { getLatestExchangeRate } from "@lib/finance";
 
 export const POST: APIRoute = async ({ request, locals }) => {
@@ -12,6 +12,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
         headers: { Location: "/auth/login?returnTo=/dashboard/withdraw" },
       });
     }
+    await setRLSUser(userId);
 
     const formData = await request.formData();
     const accountId = Number(formData.get("account_id"));
@@ -102,7 +103,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
         amount,
         currency,
         date,
-        description,
+        notes,
         previous_value,
         new_value,
         usd_to_cop_rate,
