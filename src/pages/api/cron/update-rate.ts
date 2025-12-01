@@ -3,10 +3,11 @@ import { sql } from "@lib/db";
 
 export const GET: APIRoute = async ({ request }) => {
   try {
-    // 🔐 SEGURIDAD: SOLO VERCEL PUEDE EJECUTAR ESTO
-    const auth = request.headers.get("authorization");
+    const url = new URL(request.url);
+    const token = url.searchParams.get("token");
 
-    if (auth !== `Bearer ${import.meta.env.CRON_SECRET}`) {
+    // 🔐 BLOQUEO TOTAL SI NO ES VERCEL
+    if (token !== import.meta.env.CRON_SECRET) {
       return new Response(
         JSON.stringify({ success: false, error: "Unauthorized" }),
         { status: 401, headers: { "Content-Type": "application/json" } }
@@ -16,14 +17,13 @@ export const GET: APIRoute = async ({ request }) => {
     // 1️⃣ Fetch USD → COP rate and store it
     const apiKey = import.meta.env.CURRENCY_API_KEY;
     if (!apiKey) {
-      throw new Error(
-        "CURRENCY_API_KEY no está configurada en las variables de entorno"
-      );
+      throw new Error("CURRENCY_API_KEY no está configurada");
     }
 
     const res = await fetch(
       `https://currencyapi.net/api/v1/rates?base=USD&output=json&key=${apiKey}`
     );
+
     const data = await res.json();
     const rate = data?.rates?.COP;
 
@@ -35,10 +35,10 @@ export const GET: APIRoute = async ({ request }) => {
       timeZone: "America/Bogota",
     });
 
-    // ✅ UPSERT seguro en Neon
+    // ✅ UPSERT seguro
     await sql`
-      INSERT INTO exchange_rates (date, usd_to_cop, notes)
-      VALUES (${today}, ${rate}, 'Cron job')
+      INSERT INTO exchange_rates (date, usd_to_cop)
+      VALUES (${today}, ${rate})
       ON CONFLICT (date) DO UPDATE SET
         usd_to_cop = ${rate};
     `;
@@ -48,19 +48,15 @@ export const GET: APIRoute = async ({ request }) => {
       headers: { "Content-Type": "application/json" },
     });
   } catch (error) {
-    console.error("Combined cron error:", error);
+    console.error("Cron error:", error);
 
     return new Response(
       JSON.stringify({
         success: false,
-        error: "Error executing combined cron",
-        details:
-          error instanceof Error ? error.message : String(error),
+        error: "Error executing cron",
+        details: error instanceof Error ? error.message : String(error),
       }),
-      {
-        status: 500,
-        headers: { "Content-Type": "application/json" },
-      }
+      { status: 500, headers: { "Content-Type": "application/json" } }
     );
   }
 };
