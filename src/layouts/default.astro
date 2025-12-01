@@ -1,6 +1,6 @@
 ---
 import "@styles/global.css";
-import Sidebar from "@components/sidebar.astro";
+import Sidebar from "@components/dashboard/sidebar.astro";
 
 interface Props {
   title?: string;
@@ -9,6 +9,7 @@ interface Props {
 
 const { title, activePage } = Astro.props;
 ---
+
 <html lang="es">
   <head>
     <meta charset="UTF-8" />
@@ -20,7 +21,9 @@ const { title, activePage } = Astro.props;
       <aside class="lg:w-64">
         <Sidebar activePage={activePage} />
       </aside>
-      <main class="flex-1 w-full p-4 sm:p-6 lg:p-8 pt-16 md:pt-8 overflow-y-auto">
+      <main
+        class="flex-1 w-full p-4 sm:p-6 lg:p-8 pt-16 md:pt-8 overflow-y-auto"
+      >
         <slot />
       </main>
     </div>

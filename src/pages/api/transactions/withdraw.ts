@@ -26,7 +26,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
       return new Response(null, {
         status: 302,
         headers: {
-          Location: "/admin/withdraw?error=" + encodeURIComponent("Datos inválidos")
+          Location: "/dashboard/withdraw?error=" + encodeURIComponent("Datos inválidos")
         },
       });
     }
@@ -42,7 +42,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
       return new Response(null, {
         status: 302,
         headers: {
-          Location: "/admin/withdraw?error=" + encodeURIComponent("Cuenta no encontrada")
+          Location: "/dashboard/withdraw?error=" + encodeURIComponent("Cuenta no encontrada")
         },
       });
     }
@@ -54,7 +54,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
       return new Response(null, {
         status: 302,
         headers: {
-          Location: "/admin/withdraw?error=" + encodeURIComponent(
+          Location: "/dashboard/withdraw?error=" + encodeURIComponent(
             `La cuenta es en ${accountCurrency}, no puedes retirar en ${currency}`
           )
         },
@@ -69,7 +69,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
         return new Response(null, {
           status: 302,
           headers: {
-            Location: "/admin/withdraw?error=" + encodeURIComponent(
+            Location: "/dashboard/withdraw?error=" + encodeURIComponent(
               "No hay tasa de cambio registrada. Por favor, registra una tasa primero."
             )
           },
@@ -127,7 +127,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
 
     return new Response(null, {
       status: 302,
-      headers: { Location: "/admin/withdraw?success=1" },
+      headers: { Location: "/dashboard/withdraw?success=1" },
     });
 
   } catch (err: any) {
@@ -135,7 +135,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
     return new Response(null, {
       status: 302,
       headers: {
-        Location: "/admin/withdraw?error=" + encodeURIComponent(
+        Location: "/dashboard/withdraw?error=" + encodeURIComponent(
           err.message || "Error al registrar retiro"
         ),
       },

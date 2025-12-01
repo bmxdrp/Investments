@@ -61,7 +61,7 @@ if (Astro.request.method === "POST") {
       }
 
       await sql`DELETE FROM accounts WHERE id = ${accountId};`;
-      return Astro.redirect("/admin/accounts?success=2");
+      return Astro.redirect("/dashboard/accounts?success=2");
     }
 
     // Si no, es crear cuenta/subcuenta
@@ -88,12 +88,12 @@ if (Astro.request.method === "POST") {
       `;
     }
 
-    return Astro.redirect("/admin/accounts?success=1");
+    return Astro.redirect("/dashboard/accounts?success=1");
   } catch (e) {
     console.error("Error al procesar la solicitud:", e);
     const errorMsg = e instanceof Error ? e.message : "Error desconocido";
     return Astro.redirect(
-      `/admin/accounts?error=${encodeURIComponent(errorMsg)}`,
+      `/dashboard/accounts?error=${encodeURIComponent(errorMsg)}`,
     );
   }
 }
