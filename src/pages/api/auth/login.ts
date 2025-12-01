@@ -45,7 +45,7 @@ export const POST: APIRoute = async ({ request }) => {
 
     // Crear sesión
     const sessionId = randomUUID();
-   const expiresAt = new Date(Date.now() + 1000 * 60 * 30000); // 30 minutos (arreglar despues)
+   const expiresAt = new Date(Date.now() + 1000 * 60 * 30); // 30 minutos
 
     await sql`
       INSERT INTO sessions (id, user_id, expires_at)
