@@ -1,6 +1,6 @@
 ---
 import Layout from "@layouts/default.astro";
-import Sidebar from "@components/sidebar.astro";
+
 import { sql } from "@lib/db";
 
 const userId = Astro.locals.userId;
@@ -232,7 +232,7 @@ const today = new Date().toLocaleDateString("en-CA", {
                 </tr>
               </thead>
               <tbody class="bg-white divide-y divide-gray-200">
-                {rateHistory.map((rate, index) => {
+                {rateHistory.slice(0, 31).map((rate, index) => {
                   const currentRate = Number(rate.usd_to_cop);
                   const previousRate =
                     index < rateHistory.length - 1

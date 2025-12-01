@@ -4,14 +4,15 @@ import { sql } from "@lib/db";
 export const GET: APIRoute = async () => {
     try {
         // Obtener historial de tasas de cambio
-        const rates = await sql`
+        const rat = await sql`
       SELECT 
         date,
         usd_to_cop
       FROM exchange_rates
-      ORDER BY date ASC
-      LIMIT 30;
+      ORDER BY date DESC
+      LIMIT 7;
     `;
+    const rates = rat.reverse();
 
         if (rates.length === 0) {
             return new Response(null, {
@@ -19,7 +20,6 @@ export const GET: APIRoute = async () => {
                 headers: { "Content-Type": "image/png" },
             });
         }
-
         // Preparar datos para el gráfico
         const labels = rates.map((r) => {
             const date = new Date(r.date);

@@ -1,6 +1,6 @@
 ---
 import Layout from "@layouts/default.astro";
-import Sidebar from "@components/sidebar.astro";
+
 import { sql, asRows } from "@lib/db";
 
 const userId = Astro.locals.userId;
@@ -132,7 +132,8 @@ const worstMonth = monthEntries[monthEntries.length - 1] ?? null;
           <div class="text-right">
             <p class="text-sm text-gray-500">
               Tipo de cambio USD/COP: <span class="font-mono font-semibold"
-                >{usdToCop.toFixed(2)}</span>
+                >{usdToCop.toFixed(2)}</span
+              >
             </p>
           </div>
         </div>
