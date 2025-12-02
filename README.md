@@ -1,64 +1,87 @@
-# 💰 Investment Tracker
+# 🧘 Capyte - Control de Inversiones con Calma y Solidez
 
-Sistema completo de gestión de inversiones personales con soporte multi-moneda (COP/USD), análisis avanzado y visualización de datos.
+> *"La tranquilidad de un capibara, la solidez de la tecnología"*
 
-![Status](https://img.shields.io/badge/status-en%20desarrollo-yellow)
-![Version](https://img.shields.io/badge/version-0.1.0-blue)
+Sistema completo de gestión de inversiones personales con soporte multi-moneda (COP/USD), verificación de email, recuperación de contraseña y análisis avanzado.
+
+![Status](https://img.shields.io/badge/status-activo-success)
+![Version](https://img.shields.io/badge/version-1.0.0-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
 ---
 
-## 🚀 Características
+## 🌟 Características Principales
 
-### ✅ Implementadas
-- 🔐 **Autenticación segura** con sesiones y Argon2
+### ✅ Sistema de Autenticación Completo
+- 🔐 **Registro seguro** con verificación de email (Nodemailer)
+- 📧 **Recuperación de contraseña** vía email
+- 🔒 **Sesiones seguras** con Argon2
+- ✉️ **Emails transaccionales** con plantillas HTML personalizadas
+- 🛡️ **Row Level Security (RLS)** en PostgreSQL
+
+### 💼 Gestión de Inversiones
 - 📊 **Dashboard interactivo** con métricas en tiempo real
-- 💼 **Gestión de cuentas** con soporte para subcuentas jerárquicas
-- 💵 **Multi-moneda** (COP y USD) con tasas de cambio históricas
-- 📈 **Gráficos avanzados** con Chart.js
-- 📉 **Análisis estadístico** (ROI, volatilidad, Sharpe ratio, max drawdown)
-- 🔍 **Auditoría completa** de todas las transacciones
-- 📅 **Historial detallado** de movimientos por mes
-- 🌐 **Responsive design** optimizado para mobile
+- � **Gestión de cuentas** con soporte para subcuentas jerárquicas
+- 💵 **Multi-moneda** (COP y USD) con tasas de cambio automáticas
+- 📈 **Transferencias** entre cuentas con conversión automática
+- 💸 **Aportes y retiros** con validación de fondos
+- � **Historial completo** de transacciones
 
-### 🚧 En Desarrollo
-- ⚠️ Reparación de endpoints críticos
-- 🔄 Migración a sistema unificado de transacciones
-- 💳 Integración con Stripe para suscripciones
-- 🔌 API pública REST documentada
+### 📊 Análisis y Visualización
+- 📉 **Estadísticas avanzadas** (ROI, volatilidad, rendimiento)
+- 📈 **Gráficos dinámicos** con Chart.js
+- 🔍 **Auditoría completa** de todas las operaciones
+- � **Diseño responsive** optimizado para mobile y desktop
+
+### 🎨 Diseño Premium
+- 🌙 **Tema oscuro** con paleta Stone/Amber/Teal
+- ✨ **Glassmorphism** y animaciones sutiles
+- 🧘 **UX zen** inspirado en la calma del capibara
+- 🎯 **SEO optimizado** con meta tags completos
 
 ---
 
 ## 🛠️ Stack Tecnológico
 
-- **Frontend:** Astro 5.15.9 + TailwindCSS 4.1.17
-- **Backend:** Astro API Routes (Serverless)
+### Frontend
+- **Framework:** Astro 5.15.9
+- **Estilos:** TailwindCSS 4.1.17
+- **Gráficos:** Chart.js 4.5.1
+- **Iconos:** Heroicons (SVG)
+
+### Backend
+- **Runtime:** Astro API Routes (Serverless)
 - **Database:** Neon PostgreSQL (Serverless)
+- **ORM:** Neon Serverless Driver
 - **Auth:** Sesiones con Argon2
-- **Charts:** Chart.js 4.5.1
+- **Email:** Nodemailer
+
+### DevOps & Tools
 - **Deploy:** Vercel
+- **Package Manager:** pnpm
+- **Testing:** Jest
+- **Linting:** TypeScript ESLint
 
 ---
 
-## 📦 Instalación
+## 📦 Instalación Rápida
 
 ### Prerrequisitos
-- Node.js 18+ 
-- npm o pnpm
-- Cuenta en Neon Database
+- Node.js 18+
+- pnpm (recomendado) o npm
+- Cuenta en [Neon Database](https://neon.tech)
+- Servidor SMTP (Gmail, SendGrid, Mailtrap, etc.)
 
-### Pasos
+### Pasos de Instalación
 
 1. **Clonar el repositorio**
 ```bash
-git clone https://github.com/tu-usuario/investment-tracker.git
-cd investment-tracker
+git clone https://github.com/tu-usuario/capyte.git
+cd capyte
 ```
 
 2. **Instalar dependencias**
 ```bash
-npm install
-# o
 pnpm install
 ```
 
@@ -69,19 +92,28 @@ cp .env.example .env
 
 Editar `.env` con tus credenciales:
 ```env
+# Database
 DATABASE_URL=postgresql://user:password@host/database
+
+# SMTP (Nodemailer)
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_USER=tu-email@gmail.com
+SMTP_PASS=tu-contraseña-de-aplicacion
+
+# Currency API (opcional)
 CURRENCY_API_KEY=tu_api_key_de_currencyapi_net
 ```
 
-4. **Ejecutar migraciones de base de datos**
+4. **Configurar base de datos**
 ```bash
-# Ver estructura en: docs/database-schema.sql
-# Ejecutar manualmente en Neon Console
+# Las tablas se crean automáticamente al ejecutar la app
+# O ejecuta manualmente el schema en Neon Console
 ```
 
 5. **Iniciar servidor de desarrollo**
 ```bash
-npm run dev
+pnpm dev
 ```
 
 6. **Abrir en navegador**
@@ -91,33 +123,35 @@ http://localhost:4321
 
 ---
 
-## 📚 Documentación
+## 📚 Estructura del Proyecto
 
-### Archivos de Documentación
-- **[INFORME_PROYECTO.md](./INFORME_PROYECTO.md)** - Análisis completo del proyecto
-- **[ARQUITECTURA.md](./ARQUITECTURA.md)** - Diagrama de arquitectura
-- **[PLAN_REPARACION.md](./PLAN_REPARACION.md)** - Código para reparar funcionalidades
-- **[CHECKLIST.md](./CHECKLIST.md)** - Lista de tareas pendientes
-- **[RESUMEN_EJECUTIVO.md](./RESUMEN_EJECUTIVO.md)** - Resumen para decisores
-
-### Estructura del Proyecto
 ```
-investment-tracker/
+capyte/
 ├── src/
-│   ├── components/       # Componentes reutilizables
-│   ├── layouts/          # Layouts de página
-│   ├── lib/              # Lógica de negocio
-│   │   ├── db.ts         # Conexión a base de datos
-│   │   ├── finance.ts    # Funciones financieras
-│   │   └── audit.ts      # Sistema de auditoría
-│   ├── middleware.ts     # Autenticación
-│   ├── pages/            # Rutas y páginas
-│   │   ├── admin/        # Dashboard y gestión
-│   │   ├── api/          # API endpoints
-│   │   └── auth/         # Login/registro
-│   └── styles/           # CSS global
-├── public/               # Assets estáticos
-└── docs/                 # Documentación adicional
+│   ├── components/          # Componentes reutilizables
+│   │   ├── admin/          # Componentes del admin
+│   │   └── dashboard/      # Componentes del dashboard
+│   ├── layouts/            # Layouts de página
+│   │   ├── home.astro      # Layout landing (con SEO)
+│   │   ├── default.astro   # Layout dashboard
+│   │   ├── admin.astro     # Layout admin
+│   │   └── error.astro     # Layout errores
+│   ├── lib/                # Lógica de negocio
+│   │   ├── db.ts          # Conexión DB + RLS
+│   │   ├── finance.ts     # Funciones financieras
+│   │   └── audit.ts       # Sistema de auditoría
+│   ├── middleware.ts       # Auth + protección de rutas
+│   ├── pages/             # Rutas y páginas
+│   │   ├── index.astro    # Landing page
+│   │   ├── auth/          # Login/registro/recovery
+│   │   ├── dashboard/     # Panel usuario
+│   │   ├── admin/         # Panel admin
+│   │   └── api/           # API endpoints
+│   └── styles/            # CSS global
+├── public/                # Assets estáticos
+│   ├── logo.png          # Logo capibara
+│   └── robots.txt        # SEO
+└── docs/                 # Documentación
 ```
 
 ---
@@ -126,145 +160,271 @@ investment-tracker/
 
 | Comando | Descripción |
 |---------|-------------|
-| `npm run dev` | Inicia servidor de desarrollo |
-| `npm run build` | Construye para producción |
-| `npm run preview` | Preview de build de producción |
-| `npm run astro` | CLI de Astro |
+| `pnpm dev` | Servidor de desarrollo (puerto 4321) |
+| `pnpm build` | Build para producción |
+| `pnpm preview` | Preview del build |
+| `pnpm test` | Ejecutar tests con Jest |
+| `pnpm test:watch` | Tests en modo watch |
 
 ---
 
-## 🚨 Estado Actual
+## � Características Detalladas
 
-### ⚠️ Problemas Conocidos
+### 🔐 Sistema de Autenticación
 
-1. **Endpoints rotos:**
-   - `/api/transactions/contribute` - Funciones faltantes
-   - `/api/cron` - Funciones faltantes
+#### Registro con Verificación de Email
+1. Usuario se registra con email y contraseña
+2. Sistema envía email de verificación con token único
+3. Usuario hace clic en el enlace (válido 24h)
+4. Cuenta se activa automáticamente
+5. Usuario puede iniciar sesión
 
-2. **Seguridad:**
-   - API key expuesta (debe moverse a `.env`)
-   - Falta validación en algunos endpoints
+#### Recuperación de Contraseña
+1. Usuario solicita recuperación desde `/auth/forgot-password`
+2. Sistema envía email con enlace de recuperación
+3. Usuario ingresa nueva contraseña
+4. Token se marca como usado
+5. Usuario puede iniciar sesión con nueva contraseña
 
-3. **Performance:**
-   - Queries N+1 en dashboard (lento con muchos datos)
+### � Gestión de Transacciones
 
-**Ver [PLAN_REPARACION.md](./PLAN_REPARACION.md) para soluciones.**
+#### Sistema Unificado
+- **Tabla única:** `transactions` para todos los movimientos
+- **Tipos soportados:**
+  - `initial_balance` - Saldo inicial
+  - `contribution` - Aporte
+  - `withdrawal` - Retiro
+  - `transf_in` / `transf_out` - Transferencias
+  - `fee` - Comisiones
+  - `adjustment` - Ajustes manuales
 
----
+#### Conversión Automática
+- Transferencias entre monedas diferentes
+- Tasa de cambio guardada en cada transacción
+- Cálculos precisos con 2 decimales
 
-## 📖 Uso
+### 📊 Dashboard y Análisis
 
-### 1. Registro e Inicio de Sesión
-```
-1. Ir a /auth/register
-2. Crear cuenta con email y contraseña
-3. Iniciar sesión en /auth/login
-```
+#### Métricas Disponibles
+- **Valor total del portafolio** (en COP)
+- **Total invertido** vs **Total retirado**
+- **Retorno neto** y **ROI %**
+- **Volatilidad** (desviación estándar)
+- **Mejor/Peor mes** de rendimiento
 
-### 2. Crear Cuentas de Inversión
-```
-1. Ir a /admin/accounts
-2. Click en "Nueva Cuenta"
-3. Ingresar nombre, tipo y moneda
-4. (Opcional) Crear subcuentas
-```
-
-### 3. Registrar Aportes
-```
-1. Ir a /admin/contribute
-2. Seleccionar cuenta
-3. Ingresar monto y fecha
-4. Guardar
-```
-
-### 4. Ver Dashboard
-```
-1. Ir a /admin
-2. Ver resumen de portafolio
-3. Analizar retornos y distribución
-```
+#### Gráficos Generados
+- Historial de valores
+- Rentabilidad acumulada
+- Rendimiento % diario
+- Aportes vs Retiros
+- Distribución por moneda
+- Comparativa COP/USD
 
 ---
 
 ## 🔌 API Endpoints
 
 ### Autenticación
-- `POST /api/auth/login` - Iniciar sesión
-- `POST /api/auth/register` - Registrar usuario
-- `GET /api/auth/logout` - Cerrar sesión
-
-### Cuentas
-- `GET /api/accounts` - Listar cuentas
-- `POST /api/accounts` - Crear cuenta
-- `DELETE /api/accounts/[id]` - Eliminar cuenta
+```
+POST   /api/auth/register         # Registro + email verificación
+POST   /api/auth/login            # Login (requiere email verificado)
+GET    /api/auth/logout           # Logout
+POST   /api/auth/forgot-password  # Solicitar recuperación
+POST   /api/auth/reset-password   # Restablecer contraseña
+GET    /api/auth/verify-email     # Verificar email
+```
 
 ### Transacciones
-- `POST /api/transactions/contribute` - Registrar aporte ⚠️
-- `POST /api/transactions/withdraw` - Registrar retiro
-- `POST /api/transactions/exchange_rate` - Actualizar tasa
+```
+POST   /api/transactions/contribute  # Registrar aporte
+POST   /api/transactions/withdraw    # Registrar retiro
+POST   /api/transactions/transfer    # Transferir entre cuentas
+```
+
+### Cuentas
+```
+GET    /api/accounts              # Listar cuentas
+POST   /api/accounts              # Crear cuenta
+DELETE /api/accounts/[id]         # Eliminar cuenta
+```
 
 ### Datos
-- `GET /api/portfolio-history` - Historial de portafolio
-- `GET /api/graphics/index` - Datos para gráficos
-- `GET /api/cron` - Actualización diaria ⚠️
+```
+GET    /api/graphics              # Gráficos dinámicos
+GET    /api/cron/update-rate      # Actualizar tasa de cambio
+```
+
+### SEO
+```
+GET    /sitemap.xml              # Sitemap dinámico
+GET    /robots.txt               # Control de crawlers
+```
 
 ---
 
 ## 🗄️ Base de Datos
 
 ### Tablas Principales
-- `users` - Usuarios del sistema
-- `sessions` - Sesiones activas
-- `accounts` - Cuentas de inversión
-- `contributions` - Aportes realizados
-- `withdrawals` - Retiros realizados
-- `exchange_rates` - Tasas de cambio históricas
-- `account_value_history` - Valores históricos de cuentas
-- `transaction_audit` - Log de auditoría
 
-### Vistas
-- `accounts_balance` - Balances calculados de cuentas
+#### `users`
+- Usuarios del sistema
+- Campos: `id`, `email`, `password_hash`, `email_verified_at`, `role`
+
+#### `sessions`
+- Sesiones activas
+- Expiración automática (30 minutos)
+
+#### `accounts`
+- Cuentas de inversión
+- Soporte para jerarquías (parent_id)
+- Monedas: COP, USD
+
+#### `transactions`
+- **Tabla unificada** para todos los movimientos
+- Campos clave: `type`, `amount`, `currency`, `new_value`, `usd_to_cop_rate`
+
+#### `exchange_rates`
+- Tasas de cambio históricas USD/COP
+- Actualización automática vía cron
+
+#### `password_resets`
+- Tokens de recuperación de contraseña
+- Expiración: 1 hora
+
+#### `email_verifications`
+- Tokens de verificación de email
+- Expiración: 24 horas
+
+### Vistas y Funciones
+- `cash_flows` - Vista de flujos de efectivo
+- `account_balances` - Vista de balances
+- `create_transfer()` - Función para transferencias
+- `adjust_account_value()` - Función para ajustes
 
 ---
 
-## 🚀 Roadmap
+## 🎨 Diseño y UX
 
-### Fase 1: Estabilización (Completar esta semana)
-- [x] Análisis completo del proyecto
-- [x] Limpieza de archivos obsoletos
-- [ ] Reparar funcionalidades rotas
-- [ ] Mover API key a variables de entorno
-- [ ] Añadir validación de datos
+### Paleta de Colores
+- **Stone** (950-50): Base oscura, calma
+- **Amber** (600-400): Acentos cálidos, confianza
+- **Teal** (500-400): Toques de serenidad
 
-### Fase 2: Optimización (1-2 semanas)
-- [ ] Eliminar queries N+1
-- [ ] Implementar cache
-- [ ] Añadir tests unitarios
-- [ ] Mejorar manejo de errores
+### Principios de Diseño
+1. **Calma visual** - Sin elementos distractores
+2. **Glassmorphism** - Transparencias y blur
+3. **Animaciones sutiles** - Transiciones suaves
+4. **Responsive first** - Mobile y desktop
 
-### Fase 3: SaaS MVP (1 mes)
-- [ ] Integrar Stripe
-- [ ] Crear planes de suscripción
-- [ ] API pública v1
-- [ ] Landing page de marketing
+### Componentes Clave
+- Sidebars con logo capibara
+- Cards con glassmorphism
+- Botones con gradientes amber
+- Inputs con focus rings amber
+- Mensajes de error/éxito temáticos
 
-### Fase 4: Crecimiento (3+ meses)
-- [ ] Integraciones bancarias
-- [ ] Mobile app (PWA)
-- [ ] Análisis con ML
-- [ ] Marketplace de integraciones
+---
+
+## 🔒 Seguridad
+
+### Implementado
+✅ Argon2 para hashing de contraseñas  
+✅ Row Level Security (RLS) en PostgreSQL  
+✅ Validación de entrada con Zod  
+✅ Sesiones con expiración automática  
+✅ Tokens únicos (UUID) para recuperación  
+✅ CSRF protection en formularios  
+✅ HttpOnly cookies  
+✅ Middleware de autenticación  
+
+### Mejores Prácticas
+- Nunca exponer API keys en el código
+- Validar todos los inputs del usuario
+- Usar prepared statements (SQL injection protection)
+- Limitar intentos de login (rate limiting)
+- Logs de auditoría para acciones críticas
+
+---
+
+## 📈 SEO y Performance
+
+### SEO Implementado
+✅ Meta tags completos (title, description, keywords)  
+✅ Open Graph para redes sociales  
+✅ Twitter Cards  
+✅ Structured Data (JSON-LD)  
+✅ Sitemap.xml dinámico  
+✅ Robots.txt configurado  
+✅ Canonical URLs  
+✅ Favicon y Apple Touch Icon  
+
+### Performance
+- Serverless functions (Vercel Edge)
+- PostgreSQL con índices optimizados
+- Lazy loading de imágenes
+- CSS minificado con TailwindCSS
+- Astro Islands para JS mínimo
+
+---
+
+## 🚀 Deploy en Vercel
+
+1. **Conectar repositorio**
+```bash
+vercel
+```
+
+2. **Configurar variables de entorno**
+- Agregar todas las variables del `.env` en Vercel Dashboard
+
+3. **Deploy automático**
+- Push a `main` → Deploy automático
+- Preview deployments en PRs
+
+4. **Configurar dominio**
+- Agregar dominio custom en Vercel
+- Actualizar `robots.txt` con el dominio final
+
+---
+
+## 🧪 Testing
+
+```bash
+# Ejecutar todos los tests
+pnpm test
+
+# Tests en modo watch
+pnpm test:watch
+
+# Coverage
+pnpm test --coverage
+```
+
+### Estructura de Tests
+```
+tests/
+├── unit/           # Tests unitarios
+├── integration/    # Tests de integración
+└── e2e/           # Tests end-to-end
+```
 
 ---
 
 ## 🤝 Contribuir
 
-Las contribuciones son bienvenidas! Por favor:
+¡Las contribuciones son bienvenidas! Por favor:
 
 1. Fork el proyecto
-2. Crea una rama para tu feature (`git checkout -b feature/AmazingFeature`)
-3. Commit tus cambios (`git commit -m 'Add some AmazingFeature'`)
+2. Crea una rama (`git checkout -b feature/AmazingFeature`)
+3. Commit tus cambios (`git commit -m 'Add AmazingFeature'`)
 4. Push a la rama (`git push origin feature/AmazingFeature`)
 5. Abre un Pull Request
+
+### Guidelines
+- Seguir convenciones de código existentes
+- Agregar tests para nuevas features
+- Actualizar documentación
+- Mantener commits atómicos y descriptivos
 
 ---
 
@@ -276,29 +436,30 @@ Este proyecto está bajo la Licencia MIT. Ver archivo `LICENSE` para más detall
 
 ## 👤 Autor
 
-**Tu Nombre**
-- GitHub: [@tu-usuario](https://github.com/tu-usuario)
-- Email: tu@email.com
+**Capyte Team**
+- Website: [capyte.afroletra.com](https://capyte.afroletra.com)
+- Email: soporte@capyte.com
 
 ---
 
 ## 🙏 Agradecimientos
 
-- [Astro](https://astro.build) - Framework web
-- [Neon](https://neon.tech) - Base de datos serverless
-- [Vercel](https://vercel.com) - Hosting
-- [TailwindCSS](https://tailwindcss.com) - Estilos
-- [Chart.js](https://www.chartjs.org) - Gráficos
+- [Astro](https://astro.build) - Framework web moderno
+- [Neon](https://neon.tech) - PostgreSQL serverless
+- [Vercel](https://vercel.com) - Hosting y deploy
+- [TailwindCSS](https://tailwindcss.com) - Utility-first CSS
+- [Chart.js](https://www.chartjs.org) - Gráficos interactivos
+- [Nodemailer](https://nodemailer.com) - Email transaccional
 
 ---
 
 ## 📞 Soporte
 
-¿Necesitas ayuda? 
+¿Necesitas ayuda?
 
-- 📖 Lee la [documentación completa](./INFORME_PROYECTO.md)
-- 🐛 Reporta bugs en [Issues](https://github.com/tu-usuario/investment-tracker/issues)
-- 💬 Únete a nuestro [Discord](#) (próximamente)
+- 📖 Lee la documentación completa
+- 🐛 Reporta bugs en [Issues](https://github.com/tu-usuario/capyte/issues)
+- 💬 Contáctanos en soporte@capyte.com
 
 ---
 
@@ -308,4 +469,21 @@ Si este proyecto te fue útil, ¡dale una estrella en GitHub! ⭐
 
 ---
 
-**Hecho con ❤️ y ☕**
+## 🗺️ Roadmap Futuro
+
+### Próximas Features
+- [ ] Integración con bancos (Plaid/Belvo)
+- [ ] App móvil (PWA)
+- [ ] Exportación a Excel/PDF
+- [ ] Notificaciones push
+- [ ] Dashboard compartido (multi-usuario)
+- [ ] API pública REST
+- [ ] Integración con Stripe
+- [ ] Análisis con IA/ML
+- [ ] Modo offline
+
+---
+
+**Hecho con 🧘 calma y ☕ café**
+
+*"Inversiones sólidas, mente en calma"*
