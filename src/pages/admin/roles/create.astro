@@ -1,0 +1,130 @@
+---
+import Layout from "@layouts/admin.astro";
+import { sql } from "@lib/db";
+
+const userId = Astro.locals.userId;
+if (!userId) {
+    return Astro.redirect("/auth/login?returnTo=/admin/roles/create");
+}
+
+let error = "";
+let success = "";
+
+if (Astro.request.method === "POST") {
+    try {
+        const formData = await Astro.request.formData();
+        const name = formData.get("name") as string;
+        const description = formData.get("description") as string;
+
+        // Validaciones básicas
+        if (!name) {
+            throw new Error("El nombre del rol es requerido");
+        }
+
+        // Verificar si existe
+        const existing = await sql`SELECT id FROM roles WHERE name = ${name}`;
+        if (existing.length > 0) {
+            throw new Error("El rol ya existe");
+        }
+
+        // Insertar
+        await sql.unsafe(`SET app.user_id = '${userId}'`);
+        await sql`
+      INSERT INTO roles (name, description)
+      VALUES (${name}, ${description})
+    `;
+
+        return Astro.redirect("/admin/roles?success=created");
+    } catch (e: any) {
+        error = e.message;
+    }
+}
+---
+
+<Layout title="Crear Rol" activePage="roles">
+    <div class="max-w-2xl mx-auto space-y-6">
+        <div class="flex items-center gap-4">
+            <a
+                href="/admin/roles"
+                class="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+            >
+                <svg
+                    class="w-5 h-5 text-gray-500"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                >
+                    <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="2"
+                        d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
+                </svg>
+            </a>
+            <h1 class="text-2xl font-bold text-gray-900">Crear Nuevo Rol</h1>
+        </div>
+
+        {
+            error && (
+                <div class="bg-red-50 text-red-700 p-4 rounded-lg border border-red-200">
+                    {error}
+                </div>
+            )
+        }
+
+        <form
+            method="POST"
+            class="bg-white rounded-xl shadow-sm border border-gray-200 p-6 space-y-6"
+        >
+            <div>
+                <label
+                    for="name"
+                    class="block text-sm font-medium text-gray-700 mb-1"
+                    >Nombre del Rol</label
+                >
+                <input
+                    type="text"
+                    name="name"
+                    id="name"
+                    required
+                    class="w-full rounded-lg border-gray-300 shadow-sm focus:border-purple-500 focus:ring-purple-500"
+                    placeholder="ej. editor"
+                />
+                <p class="text-xs text-gray-500 mt-1">
+                    Debe ser único. Se recomienda usar minúsculas y sin
+                    espacios.
+                </p>
+            </div>
+
+            <div>
+                <label
+                    for="description"
+                    class="block text-sm font-medium text-gray-700 mb-1"
+                    >Descripción</label
+                >
+                <textarea
+                    name="description"
+                    id="description"
+                    rows="3"
+                    class="w-full rounded-lg border-gray-300 shadow-sm focus:border-purple-500 focus:ring-purple-500"
+                    placeholder="Descripción de los permisos de este rol..."
+                ></textarea>
+            </div>
+
+            <div class="pt-4 flex justify-end gap-3">
+                <a
+                    href="/admin/roles"
+                    class="px-4 py-2 text-gray-700 hover:bg-gray-50 rounded-lg transition-colors"
+                >
+                    Cancelar
+                </a>
+                <button
+                    type="submit"
+                    class="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors shadow-sm"
+                >
+                    Crear Rol
+                </button>
+            </div>
+        </form>
+    </div>
+</Layout>

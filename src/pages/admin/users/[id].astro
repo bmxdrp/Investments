@@ -1,0 +1,219 @@
+---
+import Layout from "@layouts/admin.astro";
+import { sql } from "@lib/db";
+
+const { id } = Astro.params;
+const userId = Astro.locals.userId;
+
+if (!userId) {
+    return Astro.redirect(`/auth/login?returnTo=/admin/users/${id}`);
+}
+
+let user: any = null;
+let roles: any[] = [];
+let error = "";
+let success = "";
+
+try {
+    // Obtener usuario
+    const userResult = await sql`
+    SELECT id, email, role_id, created_at 
+    FROM users 
+    WHERE id = ${id}
+  `;
+
+    if (userResult.length === 0) {
+        return Astro.redirect("/admin/users");
+    }
+    user = userResult[0];
+
+    // Obtener roles
+    roles = await sql`SELECT id, name FROM roles ORDER BY name`;
+} catch (e) {
+    console.error("Error fetching user:", e);
+    return Astro.redirect("/admin/users");
+}
+
+if (Astro.request.method === "POST") {
+    try {
+        const formData = await Astro.request.formData();
+        const roleId = formData.get("role_id") as string;
+        const newPassword = formData.get("new_password") as string;
+
+        // Actualizar rol
+        await sql.unsafe(`SET app.user_id = '${userId}'`);
+        await sql`
+      UPDATE users 
+      SET role_id = ${roleId || null}
+      WHERE id = ${id}
+    `;
+
+        // Actualizar contraseña si se proporcionó
+        if (newPassword && newPassword.trim().length > 0) {
+            if (newPassword.length < 6) {
+                throw new Error(
+                    "La contraseña debe tener al menos 6 caracteres",
+                );
+            }
+            const argon2 = await import("argon2");
+            const passwordHash = await argon2.hash(newPassword);
+
+            await sql`
+        UPDATE users 
+        SET password_hash = ${passwordHash}
+        WHERE id = ${id}
+      `;
+        }
+
+        success = "Usuario actualizado correctamente";
+
+        // Refrescar datos
+        const updatedUser =
+            await sql`SELECT id, email, role_id, created_at FROM users WHERE id = ${id}`;
+        user = updatedUser[0];
+    } catch (e: any) {
+        error = e.message;
+    }
+}
+---
+
+<Layout title="Editar Usuario" activePage="users">
+    <div class="max-w-2xl mx-auto space-y-6">
+        <div class="flex items-center gap-4">
+            <a
+                href="/admin/users"
+                class="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+            >
+                <svg
+                    class="w-5 h-5 text-gray-500"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                >
+                    <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="2"
+                        d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
+                </svg>
+            </a>
+            <h1 class="text-2xl font-bold text-gray-900">Editar Usuario</h1>
+        </div>
+
+        {
+            error && (
+                <div class="bg-red-50 text-red-700 p-4 rounded-lg border border-red-200">
+                    {error}
+                </div>
+            )
+        }
+
+        {
+            success && (
+                <div class="bg-green-50 text-green-700 p-4 rounded-lg border border-green-200">
+                    {success}
+                </div>
+            )
+        }
+
+        <form
+            method="POST"
+            class="bg-white rounded-xl shadow-sm border border-gray-200 p-6 space-y-6"
+        >
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1"
+                    >ID Usuario</label
+                >
+                <input
+                    type="text"
+                    value={user.id}
+                    disabled
+                    class="w-full rounded-lg border-gray-200 bg-gray-50 text-gray-500"
+                />
+            </div>
+
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1"
+                    >Correo Electrónico</label
+                >
+                <input
+                    type="email"
+                    value={user.email}
+                    disabled
+                    class="w-full rounded-lg border-gray-200 bg-gray-50 text-gray-500"
+                />
+                <p class="text-xs text-gray-500 mt-1">
+                    El correo electrónico no se puede modificar.
+                </p>
+            </div>
+
+            <div>
+                <label
+                    for="role_id"
+                    class="block text-sm font-medium text-gray-700 mb-1"
+                    >Rol</label
+                >
+                <select
+                    name="role_id"
+                    id="role_id"
+                    class="w-full rounded-lg border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                >
+                    <option value="">Sin rol</option>
+                    {
+                        roles.map((role) => (
+                            <option
+                                value={role.id}
+                                selected={user.role_id === role.id}
+                            >
+                                {role.name}
+                            </option>
+                        ))
+                    }
+                </select>
+            </div>
+
+            <div class="pt-4 border-t border-gray-100">
+                <h3 class="text-lg font-medium text-gray-900 mb-4">
+                    Cambiar Contraseña
+                </h3>
+                <div class="bg-yellow-50 p-4 rounded-lg mb-4">
+                    <p class="text-sm text-yellow-800">
+                        Deja este campo vacío si no deseas cambiar la
+                        contraseña.
+                    </p>
+                </div>
+
+                <div>
+                    <label
+                        for="new_password"
+                        class="block text-sm font-medium text-gray-700 mb-1"
+                        >Nueva Contraseña</label
+                    >
+                    <input
+                        type="password"
+                        name="new_password"
+                        id="new_password"
+                        minlength="6"
+                        class="w-full rounded-lg border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                        placeholder="••••••••"
+                    />
+                </div>
+            </div>
+
+            <div class="pt-4 flex justify-end gap-3">
+                <a
+                    href="/admin/users"
+                    class="px-4 py-2 text-gray-700 hover:bg-gray-50 rounded-lg transition-colors"
+                >
+                    Cancelar
+                </a>
+                <button
+                    type="submit"
+                    class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors shadow-sm"
+                >
+                    Guardar Cambios
+                </button>
+            </div>
+        </form>
+    </div>
+</Layout>

@@ -1,4 +1,4 @@
-// /api/graphics/index.ts - versión totalmente corregida y robusta
+// /api/graphics/index.ts - usando Image-Charts.com
 import type { APIRoute } from "astro";
 import { sql, asRows, setRLSUser } from "@lib/db";
 
@@ -6,6 +6,7 @@ function safeNumber(v: any) {
   const n = Number(v);
   return Number.isFinite(n) ? n : 0;
 }
+
 function formatDateToYMD(d: any) {
   if (!d) return "";
   const date = d instanceof Date ? d : new Date(d);
@@ -13,15 +14,22 @@ function formatDateToYMD(d: any) {
   return date.toISOString().slice(0, 10);
 }
 
+// Función para normalizar datos a escala 0-100 para Image-Charts
+function normalizeData(data: number[]) {
+  if (data.length === 0) return [];
+  const min = Math.min(...data);
+  const max = Math.max(...data);
+  if (max === min) return data.map(() => 50);
+  return data.map(v => ((v - min) / (max - min)) * 100);
+}
+
 export const GET: APIRoute = async ({ url, locals }) => {
   try {
     const type = (url.searchParams.get("type") || "diversificacion").toString();
 
-    // Use authenticated user if available
     const authUserId = locals.userId as string;
     let userId = authUserId;
 
-    // If no auth user, check query param (legacy/public?) - but RLS might block it if not set
     if (!userId) {
       const userIdParam = url.searchParams.get("userId");
       if (userIdParam) userId = userIdParam;
@@ -37,123 +45,154 @@ export const GET: APIRoute = async ({ url, locals }) => {
     );
     const usdToCop = safeNumber(rateRows[0]?.usd_to_cop ?? 0);
 
-    const convertToCOP = (value: number, currency?: string) =>
-      currency === "USD" ? safeNumber(value) * usdToCop : safeNumber(value);
+    const convertToCOP = (value: number, currency?: string, rate?: number) =>
+      currency === "USD" ? safeNumber(value) * (rate || usdToCop) : safeNumber(value);
 
-    let chartConfig: any = null;
+    let apiUrl = "";
 
     // -----------------------
-    // 1) Diversificación por tipo
+    // 1) Diversificación por tipo (Donut/Pie)
     // -----------------------
     if (type === "diversificacion") {
-      // Get latest value per account, then aggregate by type+currency
       const rows = await sql`
-        SELECT t.type, t.currency, SUM(t.latest_value) AS total_cop_or_native
-        FROM (
-          SELECT a.type, a.currency,
-            COALESCE((
-              SELECT pv.value
-              FROM portfolio_values pv
-              WHERE pv.account_id = a.id
-              ORDER BY pv.date DESC
-              LIMIT 1
-            ), 0) AS latest_value
-          FROM accounts a
-          ${userId ? sql`WHERE a.user_id = ${userId}` : sql``}
-        ) t
-        GROUP BY t.type, t.currency
-        ORDER BY SUM(t.latest_value) DESC;
+        SELECT a.type, a.currency, SUM(COALESCE(t.latest_value, 0)) AS total_value
+        FROM accounts a
+        LEFT JOIN LATERAL (
+          SELECT t.new_value as latest_value, t.usd_to_cop_rate
+          FROM transactions t
+          WHERE t.account_id = a.id AND t.new_value IS NOT NULL
+          ORDER BY t.date DESC, t.updated_at DESC
+          LIMIT 1
+        ) t ON true
+        ${userId ? sql`WHERE a.user_id = ${userId}` : sql``}
+        GROUP BY a.type, a.currency
+        ORDER BY SUM(COALESCE(t.latest_value, 0)) DESC;
       `;
 
-      // convert USD to COP for chart (we want same unit)
       const labels = rows.map((r: any) => r.type);
-      const data = rows.map((r: any) => convertToCOP(Number(r.total_cop_or_native), r.currency));
+      const data = rows.map((r: any) => convertToCOP(Number(r.total_value), r.currency));
 
-      chartConfig = {
-        type: "doughnut",
-        data: { labels, datasets: [{ data }] },
-        options: { plugins: { title: { display: true, text: "Diversificación por tipo (en COP)" } } },
-      };
+      if (data.length === 0 || data.every(v => v === 0)) {
+        apiUrl = `https://image-charts.com/chart?chs=600x300&cht=p&chd=t:1&chl=Sin%20datos&chtt=Diversificación%20por%20tipo`;
+      } else {
+        apiUrl = `https://image-charts.com/chart?` +
+          `chs=600x400&` +
+          `cht=pd&` + // Donut chart
+          `chd=t:${data.join(',')};&` +
+          `chl=${labels.map(l => encodeURIComponent(l)).join('|')}&` +
+          `chtt=Diversificación%20por%20tipo%20(COP)&` +
+          `chco=6384FF|4ECDC4|FF6B6B|FFA07A|98D8C8|F7DC6F&` +
+          `chf=bg,s,FFFFFF`;
+      }
     }
 
     // -----------------------
     // 2) Historial total del portafolio (line)
     // -----------------------
     else if (type === "historial_valores") {
-      // total per date (converted to COP on the fly)
       const rows = await sql`
-        SELECT pv.date, SUM(
-          CASE WHEN a.currency = 'USD' THEN pv.value * ${usdToCop} ELSE pv.value END
+        SELECT t.date, SUM(
+          CASE WHEN a.currency = 'USD' 
+            THEN COALESCE(t.new_value, 0) * COALESCE(t.usd_to_cop_rate, ${usdToCop})
+            ELSE COALESCE(t.new_value, 0)
+          END
         ) AS total_cop
-        FROM portfolio_values pv
-        JOIN accounts a ON a.id = pv.account_id
-        ${userId ? sql`WHERE a.user_id = ${userId}` : sql``}
-        GROUP BY pv.date
-        ORDER BY pv.date ASC;
+        FROM transactions t
+        JOIN accounts a ON a.id = t.account_id
+        ${userId ? sql`WHERE a.user_id = ${userId} AND t.new_value IS NOT NULL` : sql`WHERE t.new_value IS NOT NULL`}
+        GROUP BY t.date
+        ORDER BY t.date ASC;
       `;
 
       const labels = rows.map((r: any) => formatDateToYMD(r.date));
       const data = rows.map((r: any) => safeNumber(r.total_cop));
+      const normalizedData = normalizeData(data);
 
-      chartConfig = {
-        type: "line",
-        data: {
-          labels,
-          datasets: [{ label: "Valor total del portafolio (COP)", data, fill: true }],
-        },
-        options: { plugins: { title: { display: true, text: "Historial del valor del portafolio (COP)" } } },
-      };
+      apiUrl = `https://image-charts.com/chart?` +
+        `chs=800x400&` +
+        `cht=lc&` + // Line chart
+        `chd=t:${normalizedData.join(',')};&` +
+        `chxt=x,y&` +
+        `chxl=0:|${labels[0]}|${labels[Math.floor(labels.length/2)]}|${labels[labels.length-1]}&` +
+        `chtt=Historial%20del%20valor%20del%20portafolio%20(COP)&` +
+        `chco=6384FF&` +
+        `chls=3&` + // Line width
+        `chm=B,6384FF33,0,0,0&` + // Fill area
+        `chf=bg,s,FFFFFF&` +
+        `chg=20,20,1,5`; // Grid
     }
 
     // -----------------------
-    // 3) Historial de aportes (bar)
+    // 3) Historial de aportes
     // -----------------------
     else if (type === "historial_aportes") {
       const rows = await sql`
-        SELECT c.date, SUM(CASE WHEN c.currency = 'USD' THEN c.amount * ${usdToCop} ELSE c.amount END) AS total_cop
-        FROM contributions c
-        JOIN accounts a ON a.id = c.account_id
-        ${userId ? sql`WHERE a.user_id = ${userId}` : sql``}
-        GROUP BY c.date
-        ORDER BY c.date ASC;
+        SELECT t.date, SUM(
+          CASE WHEN t.currency = 'USD' 
+            THEN t.amount * COALESCE(t.usd_to_cop_rate, ${usdToCop})
+            ELSE t.amount
+          END
+        ) AS total_cop
+        FROM transactions t
+        JOIN accounts a ON a.id = t.account_id
+        WHERE t.type = 'contribution'
+        ${userId ? sql`AND a.user_id = ${userId}` : sql``}
+        GROUP BY t.date
+        ORDER BY t.date ASC;
       `;
 
       const labels = rows.map((r: any) => formatDateToYMD(r.date));
       const data = rows.map((r: any) => safeNumber(r.total_cop));
+      const normalizedData = normalizeData(data);
 
-      chartConfig = {
-        type: "line",
-        data: { labels, datasets: [{ label: "Aportes (COP)", steppedLine: true, borderColor: 'rgb(255, 99, 132)', fill: false, data }] },
-        options: { plugins: { title: { display: true, text: "Aportes por fecha (COP)" } } },
-      };
+      apiUrl = `https://image-charts.com/chart?` +
+        `chs=800x400&` +
+        `cht=lc&` +
+        `chd=t:${normalizedData.join(',')};&` +
+        `chxt=x,y&` +
+        `chxl=0:|${labels[0]}|${labels[labels.length-1]}&` +
+        `chtt=Aportes%20por%20fecha%20(COP)&` +
+        `chco=FF6384&` +
+        `chls=3&` +
+        `chm=B,FF638433,0,0,0&` +
+        `chf=bg,s,FFFFFF&` +
+        `chg=20,20,1,5`;
     }
 
     // -----------------------
-    // 4) Rendimientos diarios (line) -- compute using subquery + lag
+    // 4) Rendimientos diarios
     // -----------------------
     else if (type === "rendimientos") {
       const rows = await sql`
         SELECT t.date, t.total AS total_cop, t.total - LAG(t.total) OVER (ORDER BY t.date) AS rendimiento
         FROM (
-          SELECT pv.date AS date, SUM(
-            CASE WHEN a.currency = 'USD' THEN pv.value * ${usdToCop} ELSE pv.value END
+          SELECT tr.date AS date, SUM(
+            CASE WHEN a.currency = 'USD' 
+              THEN COALESCE(tr.new_value, 0) * COALESCE(tr.usd_to_cop_rate, ${usdToCop})
+              ELSE COALESCE(tr.new_value, 0)
+            END
           ) AS total
-          FROM portfolio_values pv
-          JOIN accounts a ON a.id = pv.account_id
-          ${userId ? sql`WHERE a.user_id = ${userId}` : sql``}
-          GROUP BY pv.date
+          FROM transactions tr
+          JOIN accounts a ON a.id = tr.account_id
+          ${userId ? sql`WHERE a.user_id = ${userId} AND tr.new_value IS NOT NULL` : sql`WHERE tr.new_value IS NOT NULL`}
+          GROUP BY tr.date
         ) t
         ORDER BY t.date ASC;
       `;
 
       const labels = rows.map((r: any) => formatDateToYMD(r.date));
       const data = rows.map((r: any) => safeNumber(r.rendimiento));
+      const normalizedData = normalizeData(data);
 
-      chartConfig = {
-        type: "line",
-        data: { labels, datasets: [{ label: "Rendimiento (COP)", data }] },
-        options: { plugins: { title: { display: true, text: "Rendimiento diario (COP)" } } },
-      };
+      apiUrl = `https://image-charts.com/chart?` +
+        `chs=800x400&` +
+        `cht=lc&` +
+        `chd=t:${normalizedData.join(',')};&` +
+        `chtt=Rendimiento%20diario%20(COP)&` +
+        `chco=4ECDC4&` +
+        `chls=3&` +
+        `chf=bg,s,FFFFFF&` +
+        `chg=20,20,1,5`;
     }
 
     // -----------------------
@@ -161,52 +200,70 @@ export const GET: APIRoute = async ({ url, locals }) => {
     // -----------------------
     else if (type === "evolucion_por_tipo") {
       const rows = await sql`
-        SELECT a.type, pv.date, pv.value, a.currency
-        FROM portfolio_values pv
-        JOIN accounts a ON a.id = pv.account_id
-        ${userId ? sql`WHERE a.user_id = ${userId}` : sql``}
-        ORDER BY pv.date ASC;
+        SELECT a.type, t.date, t.new_value as value, a.currency, t.usd_to_cop_rate
+        FROM transactions t
+        JOIN accounts a ON a.id = t.account_id
+        ${userId ? sql`WHERE a.user_id = ${userId} AND t.new_value IS NOT NULL` : sql`WHERE t.new_value IS NOT NULL`}
+        ORDER BY t.date ASC;
       `;
 
-      // build unique dates and types
       const dates = Array.from(new Set(rows.map((r: any) => formatDateToYMD(r.date)))).filter(Boolean);
       const types = Array.from(new Set(rows.map((r: any) => r.type)));
 
-      const datasets = types.map((t) => ({
-        label: t,
-        data: dates.map((d) => {
+      const datasets = types.map((t) =>
+        dates.map((d) => {
           const row = rows.find((x: any) => x.type === t && formatDateToYMD(x.date) === d);
-          return row ? convertToCOP(Number(row.value), row.currency) : 0;
-        }),
-        fill: false,
-      }));
+          return row ? convertToCOP(Number(row.value), row.currency, row.usd_to_cop_rate) : 0;
+        })
+      );
 
-      chartConfig = {
-        type: "line",
-        data: { labels: dates, datasets },
-        options: { plugins: { title: { display: true, text: "Evolución por tipo de cuenta (COP)" } } },
-      };
+      const normalizedDatasets = datasets.map(d => normalizeData(d));
+      const colors = ['6384FF', 'FF6384', '4ECDC4', 'FFA07A', '98D8C8'];
+
+      apiUrl = `https://image-charts.com/chart?` +
+        `chs=800x400&` +
+        `cht=lc&` +
+        `chd=t:${normalizedDatasets.map(d => d.join(',')).join('|')}&` +
+        `chdl=${types.join('|')}&` +
+        `chtt=Evolución%20por%20tipo%20de%20cuenta&` +
+        `chco=${colors.slice(0, types.length).join(',')}&` +
+        `chls=3|3|3&` +
+        `chf=bg,s,FFFFFF&` +
+        `chg=20,20,1,5`;
     }
 
     // -----------------------
-    // 6) Ingresos vs Egresos (bar grouped by date)
+    // 6) Ingresos vs Egresos (bar)
     // -----------------------
     else if (type === "ingresos_vs_egresos") {
       const ingresos = await sql`
-        SELECT c.date, SUM(CASE WHEN c.currency = 'USD' THEN c.amount * ${usdToCop} ELSE c.amount END) AS total_cop
-        FROM contributions c
-        JOIN accounts a ON a.id = c.account_id
-        ${userId ? sql`WHERE a.user_id = ${userId}` : sql``}
-        GROUP BY c.date
-        ORDER BY c.date ASC;
+        SELECT t.date, SUM(
+          CASE WHEN t.currency = 'USD' 
+            THEN t.amount * COALESCE(t.usd_to_cop_rate, ${usdToCop})
+            ELSE t.amount
+          END
+        ) AS total_cop
+        FROM transactions t
+        JOIN accounts a ON a.id = t.account_id
+        WHERE t.type = 'contribution'
+        ${userId ? sql`AND a.user_id = ${userId}` : sql``}
+        GROUP BY t.date
+        ORDER BY t.date ASC;
       `;
+      
       const egresos = await sql`
-        SELECT w.date, SUM(CASE WHEN w.currency = 'USD' THEN w.amount * ${usdToCop} ELSE w.amount END) AS total_cop
-        FROM withdrawals w
-        JOIN accounts a ON a.id = w.account_id
-        ${userId ? sql`WHERE a.user_id = ${userId}` : sql``}
-        GROUP BY w.date
-        ORDER BY w.date ASC;
+        SELECT t.date, SUM(
+          CASE WHEN t.currency = 'USD' 
+            THEN t.amount * COALESCE(t.usd_to_cop_rate, ${usdToCop})
+            ELSE t.amount
+          END
+        ) AS total_cop
+        FROM transactions t
+        JOIN accounts a ON a.id = t.account_id
+        WHERE t.type = 'withdrawal'
+        ${userId ? sql`AND a.user_id = ${userId}` : sql``}
+        GROUP BY t.date
+        ORDER BY t.date ASC;
       `;
 
       const allDates = Array.from(new Set([
@@ -218,35 +275,39 @@ export const GET: APIRoute = async ({ url, locals }) => {
         const r = ingresos.find((x: any) => formatDateToYMD(x.date) === d);
         return r ? safeNumber(r.total_cop) : 0;
       });
+      
       const egresosData = allDates.map((d) => {
         const r = egresos.find((x: any) => formatDateToYMD(x.date) === d);
         return r ? safeNumber(r.total_cop) : 0;
       });
 
-      chartConfig = {
-        type: "bar",
-        data: {
-          labels: allDates,
-          datasets: [
-            { label: "Ingresos (COP)", data: ingresosData },
-            { label: "Egresos (COP)", data: egresosData },
-          ],
-        },
-        options: { plugins: { title: { display: true, text: "Ingresos vs Egresos (COP)" } } },
-      };
+      const normalizedIngresos = normalizeData(ingresosData);
+      const normalizedEgresos = normalizeData(egresosData);
+
+      apiUrl = `https://image-charts.com/chart?` +
+        `chs=800x400&` +
+        `cht=bvg&` + // Vertical bar grouped
+        `chd=t:${normalizedIngresos.join(',')}|${normalizedEgresos.join(',')}&` +
+        `chdl=Ingresos|Egresos&` +
+        `chtt=Ingresos%20vs%20Egresos%20(COP)&` +
+        `chco=4ECDC4,FF6384&` +
+        `chf=bg,s,FFFFFF&` +
+        `chbh=20,5,10`; // Bar width, spacing
     }
 
     // -----------------------
-    // 7) Comparativa COP vs USD (each line converted to COP)
+    // 7) Comparativa COP vs USD
     // -----------------------
     else if (type === "comparativa_cop_usd") {
       const rows = await sql`
-        SELECT pv.date AS date, a.currency AS currency, SUM(pv.value) AS total_native
-        FROM portfolio_values pv
-        JOIN accounts a ON a.id = pv.account_id
-        ${userId ? sql`WHERE a.user_id = ${userId}` : sql``}
-        GROUP BY pv.date, a.currency
-        ORDER BY pv.date ASC;
+        SELECT tr.date AS date, a.currency AS currency, 
+          SUM(COALESCE(tr.new_value, 0)) AS total_native,
+          COALESCE(tr.usd_to_cop_rate, ${usdToCop}) as rate
+        FROM transactions tr
+        JOIN accounts a ON a.id = tr.account_id
+        ${userId ? sql`WHERE a.user_id = ${userId} AND tr.new_value IS NOT NULL` : sql`WHERE tr.new_value IS NOT NULL`}
+        GROUP BY tr.date, a.currency, tr.usd_to_cop_rate
+        ORDER BY tr.date ASC;
       `;
 
       const dates = Array.from(new Set(rows.map((r: any) => formatDateToYMD(r.date)))).filter(Boolean);
@@ -255,22 +316,25 @@ export const GET: APIRoute = async ({ url, locals }) => {
         const r = rows.find((x: any) => x.currency === "COP" && formatDateToYMD(x.date) === d);
         return r ? safeNumber(r.total_native) : 0;
       });
+      
       const usdData = dates.map((d) => {
         const r = rows.find((x: any) => x.currency === "USD" && formatDateToYMD(x.date) === d);
-        return r ? safeNumber(r.total_native) * usdToCop : 0;
+        return r ? safeNumber(r.total_native) * safeNumber(r.rate) : 0;
       });
 
-      chartConfig = {
-        type: "line",
-        data: {
-          labels: dates,
-          datasets: [
-            { label: "COP (native)", data: copData },
-            { label: "USD (converted to COP)", data: usdData },
-          ],
-        },
-        options: { plugins: { title: { display: true, text: "Comparativa COP vs USD (COP units)" } } },
-      };
+      const normalizedCOP = normalizeData(copData);
+      const normalizedUSD = normalizeData(usdData);
+
+      apiUrl = `https://image-charts.com/chart?` +
+        `chs=800x400&` +
+        `cht=lc&` +
+        `chd=t:${normalizedCOP.join(',')}|${normalizedUSD.join(',')}&` +
+        `chdl=COP|USD%20(convertido)&` +
+        `chtt=Comparativa%20COP%20vs%20USD&` +
+        `chco=6384FF,FFA07A&` +
+        `chls=3|3&` +
+        `chf=bg,s,FFFFFF&` +
+        `chg=20,20,1,5`;
     }
 
     // -----------------------
@@ -278,14 +342,17 @@ export const GET: APIRoute = async ({ url, locals }) => {
     // -----------------------
     else if (type === "rentabilidad_acumulada") {
       const rows = await sql`
-        SELECT pv.date AS date, SUM(
-          CASE WHEN a.currency = 'USD' THEN pv.value * ${usdToCop} ELSE pv.value END
+        SELECT tr.date AS date, SUM(
+          CASE WHEN a.currency = 'USD' 
+            THEN COALESCE(tr.new_value, 0) * COALESCE(tr.usd_to_cop_rate, ${usdToCop})
+            ELSE COALESCE(tr.new_value, 0)
+          END
         ) AS total_cop
-        FROM portfolio_values pv
-        JOIN accounts a ON a.id = pv.account_id
-        ${userId ? sql`WHERE a.user_id = ${userId}` : sql``}
-        GROUP BY pv.date
-        ORDER BY pv.date ASC;
+        FROM transactions tr
+        JOIN accounts a ON a.id = tr.account_id
+        ${userId ? sql`WHERE a.user_id = ${userId} AND tr.new_value IS NOT NULL` : sql`WHERE tr.new_value IS NOT NULL`}
+        GROUP BY tr.date
+        ORDER BY tr.date ASC;
       `;
 
       let acumulado = 0;
@@ -301,12 +368,18 @@ export const GET: APIRoute = async ({ url, locals }) => {
       });
 
       const labels = rows.map((r: any) => formatDateToYMD(r.date));
+      const normalizedData = normalizeData(data);
 
-      chartConfig = {
-        type: "line",
-        data: { labels, datasets: [{ label: "Rentabilidad acumulada (COP)", data }] },
-        options: { plugins: { title: { display: true, text: "Rentabilidad acumulada (COP)" } } },
-      };
+      apiUrl = `https://image-charts.com/chart?` +
+        `chs=800x400&` +
+        `cht=lc&` +
+        `chd=t:${normalizedData.join(',')};&` +
+        `chtt=Rentabilidad%20acumulada%20(COP)&` +
+        `chco=4BC0C0&` +
+        `chls=3&` +
+        `chm=B,4BC0C033,0,0,0&` +
+        `chf=bg,s,FFFFFF&` +
+        `chg=20,20,1,5`;
     }
 
     // -----------------------
@@ -314,14 +387,17 @@ export const GET: APIRoute = async ({ url, locals }) => {
     // -----------------------
     else if (type === "rendimiento_porcentual") {
       const rows = await sql`
-        SELECT pv.date AS date, SUM(
-          CASE WHEN a.currency = 'USD' THEN pv.value * ${usdToCop} ELSE pv.value END
+        SELECT tr.date AS date, SUM(
+          CASE WHEN a.currency = 'USD' 
+            THEN COALESCE(tr.new_value, 0) * COALESCE(tr.usd_to_cop_rate, ${usdToCop})
+            ELSE COALESCE(tr.new_value, 0)
+          END
         ) AS total_cop
-        FROM portfolio_values pv
-        JOIN accounts a ON a.id = pv.account_id
-        ${userId ? sql`WHERE a.user_id = ${userId}` : sql``}
-        GROUP BY pv.date
-        ORDER BY pv.date ASC;
+        FROM transactions tr
+        JOIN accounts a ON a.id = tr.account_id
+        ${userId ? sql`WHERE a.user_id = ${userId} AND tr.new_value IS NOT NULL` : sql`WHERE tr.new_value IS NOT NULL`}
+        GROUP BY tr.date
+        ORDER BY tr.date ASC;
       `;
 
       const data = rows.map((r: any, i: number) => {
@@ -332,12 +408,18 @@ export const GET: APIRoute = async ({ url, locals }) => {
       });
 
       const labels = rows.map((r: any) => formatDateToYMD(r.date));
+      const normalizedData = normalizeData(data);
 
-      chartConfig = {
-        type: "line",
-        data: { labels, datasets: [{ label: "% Rendimiento diario", data }] },
-        options: { plugins: { title: { display: true, text: "Rendimiento porcentual diario" } } },
-      };
+      apiUrl = `https://image-charts.com/chart?` +
+        `chs=800x400&` +
+        `cht=lc&` +
+        `chd=t:${normalizedData.join(',')};&` +
+        `chtt=Rendimiento%20porcentual%20diario&` +
+        `chco=FF9F40&` +
+        `chls=3&` +
+        `chm=B,FF9F4033,0,0,0&` +
+        `chf=bg,s,FFFFFF&` +
+        `chg=20,20,1,5`;
     }
 
     // -----------------------
@@ -347,18 +429,11 @@ export const GET: APIRoute = async ({ url, locals }) => {
       return new Response("Tipo de gráfico no válido", { status: 400 });
     }
 
-    // Safety: ensure chartConfig has at least some data
-    const hasData = chartConfig && chartConfig.data && Array.isArray(chartConfig.data.datasets) && chartConfig.data.datasets.some((ds: any) => (ds.data || []).length > 0);
-    if (!hasData) {
-      // simple empty-chart fallback so QuickChart returns a valid image
-      chartConfig = {
-        type: "doughnut",
-        data: { labels: ["sin datos"], datasets: [{ data: [1] }] },
-        options: { plugins: { title: { display: true, text: "Sin datos" } } },
-      };
+    // Fetch desde Image-Charts
+    if (!apiUrl) {
+      apiUrl = `https://image-charts.com/chart?chs=600x300&cht=p&chd=t:1&chl=Sin%20datos`;
     }
 
-    const apiUrl = "https://quickchart.io/chart?c=" + encodeURIComponent(JSON.stringify(chartConfig));
     const res = await fetch(apiUrl);
     const arrayBuffer = await res.arrayBuffer();
 
@@ -369,7 +444,6 @@ export const GET: APIRoute = async ({ url, locals }) => {
       },
     });
   } catch (err: any) {
-    // Return a readable error for debugging (in production you may not want to expose raw error)
     console.error("Error in /api/graphics:", err);
     return new Response(`Internal Server Error: ${String(err.message ?? err)}`, { status: 500 });
   }

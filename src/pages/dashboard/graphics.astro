@@ -1,6 +1,5 @@
 ---
 import Layout from "@layouts/default.astro";
-
 import { sql, asRows } from "@lib/db";
 
 const userId = Astro.locals.userId;
@@ -12,30 +11,48 @@ const rateRows = asRows<{ usd_to_cop: number }>(
 );
 const usdToCop = Number(rateRows[0]?.usd_to_cop ?? 0);
 
-// Totals: contributions, withdrawals (converted to COP using historical where needed can be improved)
+// Totals: contributions, withdrawals (converted to COP using transaction's usd_to_cop_rate if available)
 const totalContribRows = await sql`
-  SELECT COALESCE(SUM(CASE WHEN c.currency='USD' THEN c.amount * ${usdToCop} ELSE c.amount END),0) as total
-  FROM contributions c
-  JOIN accounts a ON a.id = c.account_id
+  SELECT COALESCE(SUM(CASE 
+    WHEN t.currency='USD' THEN t.amount * COALESCE(t.usd_to_cop_rate, ${usdToCop}) 
+    ELSE t.amount 
+  END),0) as total
+  FROM transactions t
+  WHERE t.type = 'contribution'
+  AND (t.user_id = ${userId} OR t.account_id IN (SELECT id FROM accounts WHERE user_id = ${userId}));
 `;
+
 const totalWithdrawRows = await sql`
-  SELECT COALESCE(SUM(CASE WHEN w.currency='USD' THEN w.amount * ${usdToCop} ELSE w.amount END),0) as total
-  FROM withdrawals w
-  JOIN accounts a ON a.id = w.account_id
+  SELECT COALESCE(SUM(CASE 
+    WHEN t.currency='USD' THEN t.amount * COALESCE(t.usd_to_cop_rate, ${usdToCop}) 
+    ELSE t.amount 
+  END),0) as total
+  FROM transactions t
+  WHERE t.type = 'withdrawal'
+  AND (t.user_id = ${userId} OR t.account_id IN (SELECT id FROM accounts WHERE user_id = ${userId}));
 `;
+
 const totalContributed = Number(totalContribRows[0].total);
 const totalWithdrawn = Number(totalWithdrawRows[0].total);
 
-// Latest portfolio total (sum of latest values per account converted to COP)
+// Latest portfolio total (sum of new_value from latest transactions per account converted to COP)
 const portfolioRows = await sql`
-  SELECT a.id, a.currency, COALESCE((SELECT pv.value FROM portfolio_values pv WHERE pv.account_id = a.id ORDER BY pv.date DESC LIMIT 1),0) AS latest_value
-  FROM accounts a
+  SELECT DISTINCT ON (t.account_id) 
+    t.account_id, 
+    a.currency, 
+    COALESCE(t.new_value, 0) AS latest_value,
+    COALESCE(t.usd_to_cop_rate, ${usdToCop}) as rate
+  FROM transactions t
+  JOIN accounts a ON a.id = t.account_id
+  WHERE a.user_id = ${userId}
+  ORDER BY t.account_id, t.date DESC, t.updated_at DESC;
 `;
+
 let totalPortfolioCOP = 0;
 for (const r of portfolioRows) {
   totalPortfolioCOP += Number(
     r.currency === "USD"
-      ? Number(r.latest_value) * usdToCop
+      ? Number(r.latest_value) * Number(r.rate)
       : Number(r.latest_value),
   );
 }
@@ -46,45 +63,72 @@ const roi = totalContributed > 0 ? (netReturn / totalContributed) * 100 : 0;
 
 // Monthly contributions & withdrawals (last 12 months)
 const monthlyContrib = await sql`
-  SELECT to_char(date_trunc('month', c.date), 'YYYY-MM') AS month, 
-    SUM(CASE WHEN c.currency='USD' THEN c.amount * ${usdToCop} ELSE c.amount END) AS total
-  FROM contributions c
-  JOIN accounts a ON a.id = c.account_id
+  SELECT to_char(date_trunc('month', t.date), 'YYYY-MM') AS month, 
+    SUM(CASE 
+      WHEN t.currency='USD' THEN t.amount * COALESCE(t.usd_to_cop_rate, ${usdToCop}) 
+      ELSE t.amount 
+    END) AS total
+  FROM transactions t
+  WHERE t.type = 'contribution'
+  AND (t.user_id = ${userId} OR t.account_id IN (SELECT id FROM accounts WHERE user_id = ${userId}))
   GROUP BY month
   ORDER BY month DESC
   LIMIT 12;
 `;
 
 const monthlyWithdraw = await sql`
-  SELECT to_char(date_trunc('month', w.date), 'YYYY-MM') AS month, 
-    SUM(CASE WHEN w.currency='USD' THEN w.amount * ${usdToCop} ELSE w.amount END) AS total
-  FROM withdrawals w
-  JOIN accounts a ON a.id = w.account_id
+  SELECT to_char(date_trunc('month', t.date), 'YYYY-MM') AS month, 
+    SUM(CASE 
+      WHEN t.currency='USD' THEN t.amount * COALESCE(t.usd_to_cop_rate, ${usdToCop}) 
+      ELSE t.amount 
+    END) AS total
+  FROM transactions t
+  WHERE t.type = 'withdrawal'
+  AND (t.user_id = ${userId} OR t.account_id IN (SELECT id FROM accounts WHERE user_id = ${userId}))
   GROUP BY month
   ORDER BY month DESC
   LIMIT 12;
 `;
 
-// Distribution by currency (converted to COP)
+// Distribution by currency (using new_value from latest transactions)
 const distRows = await sql`
-  SELECT a.currency, SUM(COALESCE((SELECT pv.value FROM portfolio_values pv WHERE pv.account_id = a.id ORDER BY pv.date DESC LIMIT 1),0)) AS total
+  SELECT a.currency, 
+    SUM(COALESCE(latest.new_value, 0)) AS total,
+    COALESCE(latest.rate, ${usdToCop}) as rate
   FROM accounts a
-  GROUP BY a.currency;
+  LEFT JOIN LATERAL (
+    SELECT DISTINCT ON (t.account_id) 
+      t.new_value,
+      COALESCE(t.usd_to_cop_rate, ${usdToCop}) as rate
+    FROM transactions t
+    WHERE t.account_id = a.id
+    ORDER BY t.account_id, t.date DESC, t.updated_at DESC
+  ) latest ON true
+  WHERE a.user_id = ${userId}
+  GROUP BY a.currency, latest.rate;
 `;
+
 const distribution = distRows.map((d: any) => ({
   currency: d.currency,
   total_cop:
-    d.currency === "USD" ? Number(d.total) * usdToCop : Number(d.total),
+    d.currency === "USD" ? Number(d.total) * Number(d.rate) : Number(d.total),
 }));
 
-// Volatility (stddev of daily returns)
+// Volatility (stddev of daily returns using new_value from transactions)
 const dailyRows = await sql`
-  SELECT pv.date, SUM(CASE WHEN a.currency='USD' THEN pv.value * ${usdToCop} ELSE pv.value END) AS total
-  FROM portfolio_values pv
-  JOIN accounts a ON a.id = pv.account_id
-  GROUP BY pv.date
-  ORDER BY pv.date ASC;
+  SELECT t.date, 
+    SUM(CASE 
+      WHEN a.currency='USD' THEN COALESCE(t.new_value, 0) * COALESCE(t.usd_to_cop_rate, ${usdToCop}) 
+      ELSE COALESCE(t.new_value, 0) 
+    END) AS total
+  FROM transactions t
+  JOIN accounts a ON a.id = t.account_id
+  WHERE a.user_id = ${userId}
+  AND t.new_value IS NOT NULL
+  GROUP BY t.date
+  ORDER BY t.date ASC;
 `;
+
 const dailyTotals = dailyRows.map((r: any) => Number(r.total));
 function stddev(arr: number[]) {
   if (arr.length <= 1) return 0;
@@ -114,11 +158,7 @@ const bestMonth = monthEntries[0] ?? null;
 const worstMonth = monthEntries[monthEntries.length - 1] ?? null;
 ---
 
-<Layout title="Dashboard - Gráficos">
-  <div class="flex min-h-screen bg-gray-50 w-full">
-    <Sidebar activePage="dashboard" />
-
-    <main class="flex-1 ml-64 p-8 overflow-y-auto">
+<Layout title="Dashboard - Gráficos" activePage="dashboard">
       <div class="max-w-7xl mx-auto space-y-6">
         <div class="flex items-center justify-between">
           <div>
@@ -309,6 +349,4 @@ const worstMonth = monthEntries[monthEntries.length - 1] ?? null;
           >
         </div>
       </div>
-    </main>
-  </div>
 </Layout>

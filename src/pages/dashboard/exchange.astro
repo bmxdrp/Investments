@@ -63,7 +63,7 @@ if (Astro.request.method === "POST") {
     `;
 
     // Redirigir para limpiar el formulario y mostrar el mensaje de éxito
-    return Astro.redirect("/admin/exchange?success=1", 303);
+    return Astro.redirect("/dashboard/exchange?success=1", 303);
   } catch (e) {
     console.error("Error al actualizar la tasa de cambio:", e);
     const errorMsg =
@@ -72,7 +72,7 @@ if (Astro.request.method === "POST") {
         : "Error desconocido al procesar la solicitud.";
     // Redirigir con mensaje de error
     return Astro.redirect(
-      `/admin/exchange?error=${encodeURIComponent(errorMsg)}`,
+      `/dashboard/exchange?error=${encodeURIComponent(errorMsg)}`,
       303,
     );
   }

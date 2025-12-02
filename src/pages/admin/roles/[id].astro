@@ -1,0 +1,144 @@
+---
+import Layout from "@layouts/admin.astro";
+import { sql } from "@lib/db";
+
+const { id } = Astro.params;
+const userId = Astro.locals.userId;
+
+if (!userId) {
+    return Astro.redirect(`/auth/login?returnTo=/admin/roles/${id}`);
+}
+
+let role: any = null;
+let error = "";
+let success = "";
+
+try {
+    const roleResult =
+        await sql`SELECT id, name, description FROM roles WHERE id = ${id}`;
+    if (roleResult.length === 0) {
+        return Astro.redirect("/admin/roles");
+    }
+    role = roleResult[0];
+} catch (e) {
+    console.error("Error fetching role:", e);
+    return Astro.redirect("/admin/roles");
+}
+
+if (Astro.request.method === "POST") {
+    try {
+        const formData = await Astro.request.formData();
+        const description = formData.get("description") as string;
+
+        // No permitimos cambiar el nombre para simplificar, o al menos no para roles del sistema
+        // Si se quisiera permitir, habría que validar duplicados
+
+        await sql.unsafe(`SET app.user_id = '${userId}'`);
+        await sql`
+      UPDATE roles 
+      SET description = ${description}
+      WHERE id = ${id}
+    `;
+
+        success = "Rol actualizado correctamente";
+
+        // Refrescar datos
+        const updatedRole =
+            await sql`SELECT id, name, description FROM roles WHERE id = ${id}`;
+        role = updatedRole[0];
+    } catch (e: any) {
+        error = e.message;
+    }
+}
+---
+
+<Layout title="Editar Rol" activePage="roles">
+    <div class="max-w-2xl mx-auto space-y-6">
+        <div class="flex items-center gap-4">
+            <a
+                href="/admin/roles"
+                class="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+            >
+                <svg
+                    class="w-5 h-5 text-gray-500"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                >
+                    <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="2"
+                        d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
+                </svg>
+            </a>
+            <h1 class="text-2xl font-bold text-gray-900">Editar Rol</h1>
+        </div>
+
+        {
+            error && (
+                <div class="bg-red-50 text-red-700 p-4 rounded-lg border border-red-200">
+                    {error}
+                </div>
+            )
+        }
+
+        {
+            success && (
+                <div class="bg-green-50 text-green-700 p-4 rounded-lg border border-green-200">
+                    {success}
+                </div>
+            )
+        }
+
+        <form
+            method="POST"
+            class="bg-white rounded-xl shadow-sm border border-gray-200 p-6 space-y-6"
+        >
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1"
+                    >Nombre del Rol</label
+                >
+                <input
+                    type="text"
+                    value={role.name}
+                    disabled
+                    class="w-full rounded-lg border-gray-200 bg-gray-50 text-gray-500"
+                />
+                <p class="text-xs text-gray-500 mt-1">
+                    El nombre del rol no se puede modificar.
+                </p>
+            </div>
+
+            <div>
+                <label
+                    for="description"
+                    class="block text-sm font-medium text-gray-700 mb-1"
+                    >Descripción</label
+                >
+                <textarea
+                    name="description"
+                    id="description"
+                    rows="3"
+                    class="w-full rounded-lg border-gray-300 shadow-sm focus:border-purple-500 focus:ring-purple-500"
+                    >{role.description}</textarea
+                >
+            </div>
+
+            <div class="pt-4 flex justify-end gap-3">
+                <a
+                    href="/admin/roles"
+                    class="px-4 py-2 text-gray-700 hover:bg-gray-50 rounded-lg transition-colors"
+                >
+                    Cancelar
+                </a>
+                <button
+                    type="submit"
+                    class="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors shadow-sm"
+                >
+                    Guardar Cambios
+                </button>
+            </div>
+        </form>
+    </div>
+</Layout>

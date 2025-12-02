@@ -239,11 +239,11 @@ export const POST: APIRoute = async ({ request, locals }) => {
     ================================== */
     await sql`COMMIT`;
 
-    return new Response(null, { status: 302, headers: { Location: "/admin/transfer?success=1" } });
+    return new Response(null, { status: 302, headers: { Location: "/dashboard/transfer?success=1" } });
 
   } catch (error: any) {
     console.error("Transfer Error:", error);
     await sql`ROLLBACK`;
-    return new Response(error.message, { status: 302, headers: { Location: `/admin/transfer?error=${error.message}` } });
+    return new Response(error.message, { status: 302, headers: { Location: `/dashboard/transfer?error=${error.message}` } });
   }
 };

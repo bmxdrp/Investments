@@ -130,7 +130,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
     // Redirigir con éxito
     return new Response(null, {
       status: 302,
-      headers: { Location: "/admin/activity?success=1" }
+      headers: { Location: "/dashboard/activity?success=1" }
     });
 
   } catch (error: any) {
@@ -138,7 +138,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
     return new Response(null, {
       status: 302,
       headers: {
-        Location: "/admin/activity?error=" + encodeURIComponent(error.message || "Error al guardar")
+        Location: "/dashboard/activity?error=" + encodeURIComponent(error.message || "Error al guardar")
       }
     });
   }

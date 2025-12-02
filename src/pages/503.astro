@@ -1,0 +1,136 @@
+---
+import ErrorLayout from "@layouts/error.astro";
+---
+
+<ErrorLayout
+    title="Servicio No Disponible"
+    errorCode="503"
+    errorTitle="Servicio No Disponible"
+    errorMessage="El servicio está temporalmente fuera de línea por mantenimiento. Volveremos pronto."
+    iconType="notfound"
+>
+    <div class="mt-6 p-4 bg-amber-50 border border-amber-200 rounded-xl">
+        <div class="flex items-start gap-3">
+            <svg
+                class="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+            >
+                <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                ></path>
+            </svg>
+            <div class="flex-1">
+                <h3 class="text-sm font-semibold text-amber-900 mb-1">
+                    Mantenimiento Programado
+                </h3>
+                <p class="text-sm text-amber-700 mb-2">
+                    Estamos realizando mejoras en nuestro sistema para ofrecerte
+                    una mejor experiencia.
+                </p>
+                <p class="text-sm text-amber-700">
+                    Tiempo estimado: <span class="font-semibold"
+                        >15-30 minutos</span
+                    >
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <div class="mt-6 grid grid-cols-1 sm:grid-cols-3 gap-4 text-center">
+        <div class="p-4 bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl">
+            <div
+                class="w-12 h-12 bg-blue-600 rounded-full flex items-center justify-center mx-auto mb-2"
+            >
+                <svg
+                    class="w-6 h-6 text-white"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                >
+                    <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="2"
+                        d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+                    ></path>
+                </svg>
+            </div>
+            <p class="text-sm font-semibold text-blue-900">Mejoras</p>
+            <p class="text-xs text-blue-600">Nuevas funciones</p>
+        </div>
+
+        <div
+            class="p-4 bg-gradient-to-br from-green-50 to-green-100 rounded-xl"
+        >
+            <div
+                class="w-12 h-12 bg-green-600 rounded-full flex items-center justify-center mx-auto mb-2"
+            >
+                <svg
+                    class="w-6 h-6 text-white"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                >
+                    <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="2"
+                        d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+                </svg>
+            </div>
+            <p class="text-sm font-semibold text-green-900">Rendimiento</p>
+            <p class="text-xs text-green-600">Más velocidad</p>
+        </div>
+
+        <div
+            class="p-4 bg-gradient-to-br from-purple-50 to-purple-100 rounded-xl"
+        >
+            <div
+                class="w-12 h-12 bg-purple-600 rounded-full flex items-center justify-center mx-auto mb-2"
+            >
+                <svg
+                    class="w-6 h-6 text-white"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                >
+                    <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="2"
+                        d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"
+                    ></path>
+                </svg>
+            </div>
+            <p class="text-sm font-semibold text-purple-900">Seguridad</p>
+            <p class="text-xs text-purple-600">Mayor protección</p>
+        </div>
+    </div>
+
+    <div class="mt-4 flex justify-center">
+        <button
+            onclick="location.reload()"
+            class="inline-flex items-center px-4 py-2 bg-white border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+        >
+            <svg
+                class="w-4 h-4 mr-2"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+            >
+                <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                ></path>
+            </svg>
+            Intentar de Nuevo
+        </button>
+    </div>
+</ErrorLayout>

@@ -7,58 +7,58 @@ interface Props {
 const { activePage } = Astro.props;
 
 const menuItems = [
-  { name: "Dashboard", href: "/admin", icon: "dashboard", page: "dashboard" },
+  { name: "Dashboard", href: "/dashboard", icon: "dashboard", page: "dashboard" },
   {
     name: "Cuentas",
-    href: "/admin/accounts",
+    href: "/dashboard/accounts",
     icon: "accounts",
     page: "accounts",
   },
   {
     name: "Aportes",
-    href: "/admin/contribute",
+    href: "/dashboard/contribute",
     icon: "contribute",
     page: "contribute",
   },
   {
     name: "Retiros",
-    href: "/admin/withdraw",
+    href: "/dashboard/withdraw",
     icon: "withdraw",
     page: "withdraw",
   },
   {
     name: "Transferencias",
-    href: "/admin/transfer",
+    href: "/dashboard/transfer",
     icon: "transfer",
     page: "transfer",
   },
   {
     name: "Ganancias",
-    href: "/admin/activity",
+    href: "/dashboard/activity",
     icon: "activity",
     page: "activity",
   },
   {
     name: "Tasa de cambio",
-    href: "/admin/exchange",
+    href: "/dashboard/exchange",
     icon: "exchange",
     page: "exchange",
   },
   {
     name: "Historial",
-    href: "/admin/history",
+    href: "/dashboard/history",
     icon: "history",
     page: "history",
   },
   {
     name: "Gráficos",
-    href: "/admin/portfolio-history",
+    href: "/dashboard/portfolio-history",
     icon: "chart",
     page: "portfolio-history",
   },
   {
     name: "Estadísticas",
-    href: "/admin/statistics",
+    href: "/dashboard/statistics",
     icon: "stats",
     page: "statistics",
   },
@@ -69,37 +69,7 @@ const menuItems = [
 <button
   id="mobile-menu-button"
   type="button"
-  class="fixed top-4 left-4 z-50 lg:hidden p-2 rounded-lg bg-white shadow-lg border border-gray-200 hover:bg-gray-50 transition-colors"
-  aria-label="Toggle menu"
->
-  <svg
-    id="menu-open-icon"
-    class="w-6 h-6 text-gray-700"
-    fill="none"
-    stroke="currentColor"
-    viewBox="0 0 24 24"
-  >
-    <path
-      stroke-linecap="round"
-      stroke-linejoin="round"
-      stroke-width="2"
-      d="M4 6h16M4 12h16M4 18h16"></path>
-  </svg>
-  <svg
-    id="menu-close-icon"
-    class="w-6 h-6 text-gray-700 hidden"
-    fill="none"
-    stroke="currentColor"
-    viewBox="0 0 24 24"
-  >
-    <path
-      stroke-linecap="round"
-      stroke-linejoin="round"
-      stroke-width="2"
-      d="M6 18L18 6M6 6l12 12"></path>
-  </svg>
-</button>
-
+></button>
 <!-- Overlay (para cerrar el menú al hacer click fuera) -->
 <div
   id="sidebar-overlay"
@@ -333,7 +303,7 @@ const menuItems = [
     <!-- User Section -->
     <div class="p-4 border-t border-gray-200">
       <a
-        href="/logout"
+        href="/auth/logout"
         class="flex items-center gap-3 px-4 py-3 text-gray-700 hover:bg-gray-50 rounded-lg transition-colors"
       >
         <svg

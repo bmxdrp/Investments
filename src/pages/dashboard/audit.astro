@@ -1,0 +1,329 @@
+---
+// src/pages/audit.astro
+import Layout from "@layouts/default.astro";
+import { sql } from "@lib/db";
+
+// Leer query params
+const url = new URL(Astro.request.url);
+const page = Math.max(1, Number(url.searchParams.get("page") || 1));
+const perPage = Math.max(
+  10,
+  Math.min(200, Number(url.searchParams.get("perPage") || 50)),
+);
+const accountFilter = url.searchParams.get("account") || null;
+const eventFilter = url.searchParams.get("event") || null;
+const dateFrom = url.searchParams.get("from") || null;
+const dateTo = url.searchParams.get("to") || null;
+const exportCsv = url.searchParams.get("export") === "1";
+
+// Construir condiciones dinámicas (seguras con sql template)
+const whereClauses = [];
+if (accountFilter)
+  whereClauses.push(sql`ta.account_id = ${Number(accountFilter)}`);
+if (eventFilter) whereClauses.push(sql`ta.event_type = ${eventFilter}`);
+if (dateFrom) whereClauses.push(sql`ta.created_at >= ${dateFrom}`);
+if (dateTo)
+  whereClauses.push(
+    sql`ta.created_at <= ${dateTo}::timestamp + interval '1 day' - interval '1 second'`,
+  );
+
+// Generar WHERE combinado
+let whereSql = sql``;
+if (whereClauses.length > 0) {
+  // join with AND
+  whereSql = sql`WHERE ${sql.join(whereClauses, sql` AND `)}`;
+}
+
+// Si piden export, devolver CSV directamente
+if (exportCsv) {
+  // Obtener todos los registros que cumplen filtros (limitable si quieres)
+  const rows = await sql`
+    SELECT ta.id, ta.created_at, ta.account_id, a.name as account_name, ta.event_type,
+           ta.amount, ta.currency, ta.balance_before, ta.balance_after,
+           ta.market_value_before, ta.market_value_after,
+           ta.source_table, ta.source_id, ta.note, ta.created_by
+    FROM transaction_audit ta
+    LEFT JOIN accounts a ON a.id = ta.account_id
+    ${whereSql}
+    ORDER BY ta.created_at DESC
+  `;
+
+  // Construir CSV
+  const headers = [
+    "id",
+    "created_at",
+    "account_id",
+    "account_name",
+    "event_type",
+    "amount",
+    "currency",
+    "balance_before",
+    "balance_after",
+    "market_value_before",
+    "market_value_after",
+    "source_table",
+    "source_id",
+    "note",
+    "created_by",
+  ];
+
+  const escapeCsv = (v: any) => {
+    if (v === null || v === undefined) return "";
+    const s = String(v);
+    if (s.includes('"') || s.includes(",") || s.includes("\n")) {
+      return `"${s.replace(/"/g, '""')}"`;
+    }
+    return s;
+  };
+
+  const lines = [headers.join(",")];
+  for (const r of rows) {
+    const line = headers.map((h) => escapeCsv(r[h])).join(",");
+    lines.push(line);
+  }
+
+  const csv = lines.join("\n");
+  return new Response(csv, {
+    status: 200,
+    headers: {
+      "Content-Type": "text/csv; charset=utf-8",
+      "Content-Disposition": `attachment; filename="transaction_audit_export_${new Date().toISOString().slice(0, 10)}.csv"`,
+    },
+  });
+}
+
+// Consultas para página (paginada)
+const offset = (page - 1) * perPage;
+
+const audits = await sql`
+  SELECT ta.id, ta.created_at, ta.account_id, a.name as account_name, ta.event_type,
+         ta.amount, ta.currency, ta.balance_before, ta.balance_after,
+         ta.market_value_before, ta.market_value_after,
+         ta.source_table, ta.source_id, ta.note, ta.created_by
+  FROM transaction_audit ta
+  LEFT JOIN accounts a ON a.id = ta.account_id
+  ${whereSql}
+  ORDER BY ta.created_at DESC
+  LIMIT ${perPage} OFFSET ${offset}
+`;
+
+// total count
+const countRes = await sql`
+  SELECT COUNT(*)::int as cnt
+  FROM transaction_audit ta
+  ${whereSql}
+`;
+const total = countRes[0]?.cnt ?? 0;
+const totalPages = Math.max(1, Math.ceil(total / perPage));
+
+// Lista de cuentas para filtro dropdown
+const accounts = await sql`SELECT id, name FROM accounts ORDER BY name`;
+const eventTypes = [
+  "contribution",
+  "withdrawal",
+  "market_snapshot",
+  "manual_adjustment",
+  "correction",
+  "transfer",
+];
+---
+
+<Layout title="Auditoría de Transacciones" activePage="audit">
+  <section class="p-6 w-full">
+    <div class="max-w-7xl mx-auto space-y-6">
+      <div class="flex items-center justify-between gap-4">
+        <div>
+          <h1 class="text-2xl font-bold text-slate-900">
+            Auditoría de Transacciones
+          </h1>
+          <p class="text-sm text-slate-500">
+            Registro completo y trazable de contribuciones, retiros, snapshots y
+            correcciones
+          </p>
+        </div>
+
+        <div class="flex items-center gap-2">
+          <a
+            href={`?${new URLSearchParams(Object.fromEntries([...url.searchParams.entries(), ["export", "1"]]))}`}
+            class="inline-flex items-center gap-2 px-4 py-2 bg-slate-800 text-white rounded hover:opacity-95"
+          >
+            Exportar CSV
+          </a>
+        </div>
+      </div>
+
+      <!-- Filters -->
+      <form
+        method="get"
+        class="bg-white p-4 rounded-lg shadow flex flex-col md:flex-row items-start md:items-center gap-3"
+      >
+        <div class="flex items-center gap-2">
+          <label class="text-sm text-slate-600 mr-2">Cuenta</label>
+          <select name="account" class="border rounded px-2 py-1">
+            <option value="">Todas</option>
+            {
+              accounts.map((a) => (
+                <option value={a.id} selected={String(a.id) === accountFilter}>
+                  {a.name}
+                </option>
+              ))
+            }
+          </select>
+        </div>
+
+        <div class="flex items-center gap-2">
+          <label class="text-sm text-slate-600 mr-2">Evento</label>
+          <select name="event" class="border rounded px-2 py-1">
+            <option value="">Todos</option>
+            {
+              eventTypes.map((e) => (
+                <option value={e} selected={e === eventFilter}>
+                  {e}
+                </option>
+              ))
+            }
+          </select>
+        </div>
+
+        <div class="flex items-center gap-2">
+          <label class="text-sm text-slate-600 mr-2">Desde</label>
+          <input
+            type="date"
+            name="from"
+            value={dateFrom ?? ""}
+            class="border rounded px-2 py-1"
+          />
+        </div>
+
+        <div class="flex items-center gap-2">
+          <label class="text-sm text-slate-600 mr-2">Hasta</label>
+          <input
+            type="date"
+            name="to"
+            value={dateTo ?? ""}
+            class="border rounded px-2 py-1"
+          />
+        </div>
+
+        <div class="flex items-center gap-2 ml-auto">
+          <label class="text-sm text-slate-600 mr-2">Por página</label>
+          <select
+            name="perPage"
+            class="border rounded px-2 py-1"
+            value={String(perPage)}
+          >
+            <option value="10">10</option>
+            <option value="25">25</option>
+            <option value="50" selected>50</option>
+            <option value="100">100</option>
+          </select>
+          <button type="submit" class="px-3 py-1 bg-blue-600 text-white rounded"
+            >Filtrar</button
+          >
+          <a href="/dashboard/audit" class="px-3 py-1 bg-slate-100 rounded"
+            >Limpiar</a
+          >
+        </div>
+      </form>
+
+      <!-- Table -->
+      <div class="bg-white rounded-lg shadow overflow-x-auto">
+        <table class="min-w-full text-sm">
+          <thead class="bg-slate-50 text-slate-600 text-left">
+            <tr>
+              <th class="p-3">Fecha</th>
+              <th class="p-3">Cuenta</th>
+              <th class="p-3">Tipo</th>
+              <th class="p-3 text-right">Monto</th>
+              <th class="p-3 text-right">Balance Antes</th>
+              <th class="p-3 text-right">Balance Después</th>
+              <th class="p-3 text-right">Market Antes</th>
+              <th class="p-3 text-right">Market Después</th>
+              <th class="p-3">Origen</th>
+              <th class="p-3">Nota</th>
+              <th class="p-3">Usuario</th>
+            </tr>
+          </thead>
+          <tbody>
+            {
+              audits.length === 0 ? (
+                <tr>
+                  <td class="p-6 text-center text-slate-400" colspan="11">
+                    No hay registros para estos filtros
+                  </td>
+                </tr>
+              ) : (
+                audits.map((r) => (
+                  <tr class="border-t">
+                    <td class="p-3 align-top">
+                      {new Date(r.created_at).toLocaleString()}
+                    </td>
+                    <td class="p-3 align-top">
+                      {r.account_name ?? r.account_id}
+                    </td>
+                    <td class="p-3 align-top">
+                      <span class="inline-block px-2 py-1 rounded text-xs font-medium bg-slate-100">
+                        {r.event_type}
+                      </span>
+                    </td>
+                    <td class="p-3 align-top text-right">
+                      {r.amount?.toLocaleString("es-CO") ?? "-"}
+                    </td>
+                    <td class="p-3 align-top text-right">
+                      {r.balance_before ?? "-"}
+                    </td>
+                    <td class="p-3 align-top text-right">
+                      {r.balance_after ?? "-"}
+                    </td>
+                    <td class="p-3 align-top text-right">
+                      {r.market_value_before ?? "-"}
+                    </td>
+                    <td class="p-3 align-top text-right">
+                      {r.market_value_after ?? "-"}
+                    </td>
+                    <td class="p-3 align-top">
+                      {r.source_table}:{r.source_id}
+                    </td>
+                    <td class="p-3 align-top">{r.note ?? ""}</td>
+                    <td class="p-3 align-top">{r.created_by}</td>
+                  </tr>
+                ))
+              )
+            }
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Pagination -->
+      <div class="flex items-center justify-between">
+        <div class="text-sm text-slate-600">Total registros: {total}</div>
+
+        <div class="flex items-center gap-2">
+          {
+            page > 1 && (
+              <a
+                class="px-3 py-1 bg-slate-100 rounded"
+                href={`?${new URLSearchParams(Object.fromEntries([...url.searchParams.entries(), ["page", String(page - 1)]]))}`}
+              >
+                Anterior
+              </a>
+            )
+          }
+          <div class="px-3 py-1 bg-white border rounded text-sm">
+            Página {page} / {totalPages}
+          </div>
+          {
+            page < totalPages && (
+              <a
+                class="px-3 py-1 bg-slate-100 rounded"
+                href={`?${new URLSearchParams(Object.fromEntries([...url.searchParams.entries(), ["page", String(page + 1)]]))}`}
+              >
+                Siguiente
+              </a>
+            )
+          }
+        </div>
+      </div>
+    </div>
+  </section>
+</Layout>
