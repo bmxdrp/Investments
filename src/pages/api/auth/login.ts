@@ -21,7 +21,7 @@ export const POST: APIRoute = async ({ request }) => {
 
     // Buscar usuario
     const user = await sql`
-      SELECT id, password_hash 
+      SELECT id, password_hash, email_verified_at 
       FROM users 
       WHERE email = ${parsed.email}
       LIMIT 1
@@ -30,7 +30,7 @@ export const POST: APIRoute = async ({ request }) => {
     if (user.length === 0) {
       const err = new Error("Usuario o contraseña incorrectos");
       console.error("Error:", err.message);
-    return Response.redirect(new URL("/auth/login?error=" + encodeURIComponent(err.message), request.url), 303);
+      return Response.redirect(new URL("/auth/login?error=" + encodeURIComponent(err.message), request.url), 303);
     }
 
     const found = user[0];
@@ -40,12 +40,19 @@ export const POST: APIRoute = async ({ request }) => {
     if (!valid) {
       const err = new Error("Usuario o contraseña incorrectos");
       console.error("Error:", err.message);
-    return Response.redirect(new URL("/auth/login?error=" + encodeURIComponent(err.message), request.url), 303);
+      return Response.redirect(new URL("/auth/login?error=" + encodeURIComponent(err.message), request.url), 303);
+    }
+
+    // Verificar que el email esté verificado
+    if (!found.email_verified_at) {
+      const err = new Error("Debes verificar tu correo electrónico antes de iniciar sesión. Revisa tu bandeja de entrada.");
+      console.error("Error:", err.message);
+      return Response.redirect(new URL("/auth/login?error=" + encodeURIComponent(err.message), request.url), 303);
     }
 
     // Crear sesión
     const sessionId = randomUUID();
-   const expiresAt = new Date(Date.now() + 1000 * 60 * 30); // 30 minutos
+    const expiresAt = new Date(Date.now() + 1000 * 60 * 30); // 30 minutos
 
     await sql`
       INSERT INTO sessions (id, user_id, expires_at)
@@ -62,10 +69,11 @@ export const POST: APIRoute = async ({ request }) => {
     return new Response(null, { status: 302, headers });
 
   } catch (error) {
-      console.error("Error de servidor:", error);
+    console.error("Error de servidor:", error);
     return Response.redirect(new URL("/auth/login?error=" + encodeURIComponent("error de servidor"), request.url), 303);
   }
 };
+
 export const GET: APIRoute = ({ url }) => {
   const returnTo = url.searchParams.get("returnTo") || "/";
   return Response.redirect(`/auth/login?returnTo=${encodeURIComponent(returnTo)}`, 302);

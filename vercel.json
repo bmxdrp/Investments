@@ -2,11 +2,7 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "crons": [
     {
-<<<<<<< HEAD
-      "path": "/api/cron/update-rate?token=${CRON_SECRET}",
-=======
       "path": "/api/cron/update-rate",
->>>>>>> 8149c81b62c581f0da24346fcb5878dba168c726
       "schedule": "0 23 * * *"
     }
   ]

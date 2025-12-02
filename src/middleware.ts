@@ -3,7 +3,7 @@ import { sql } from "@lib/db";
 
 const PROTECTED_ROUTES = ["/dashboard", "/api"];
 const ADMIN_ROUTES = ["/admin"];
-const UNPROTECTED_ROUTES = ["/api/auth/login", "/api/auth/register", "/api/cron", "/api/auth/forgot-password", "/api/auth/reset-password"];
+const UNPROTECTED_ROUTES = ["/api/auth/login", "/api/auth/register", "/api/cron", "/api/auth/forgot-password", "/api/auth/reset-password", "/api/auth/verify-email"];
 
 // Cache de sesiones para reducir consultas a DB
 const sessionCache = new Map<string, { userId: string; userRole: string | null; expiresAt: Date }>();
