@@ -7,7 +7,12 @@ interface Props {
 const { activePage } = Astro.props;
 
 const menuItems = [
-  { name: "Dashboard", href: "/dashboard", icon: "dashboard", page: "dashboard" },
+  {
+    name: "Dashboard",
+    href: "/dashboard",
+    icon: "dashboard",
+    page: "dashboard",
+  },
   {
     name: "Cuentas",
     href: "/dashboard/accounts",
@@ -69,52 +74,72 @@ const menuItems = [
 <button
   id="mobile-menu-button"
   type="button"
-></button>
+  class="fixed top-4 left-4 z-50 lg:hidden p-2 rounded-lg bg-stone-900 shadow-lg border border-stone-800 text-stone-400 hover:text-white transition-colors"
+>
+  <svg
+    id="menu-open-icon"
+    class="w-6 h-6"
+    fill="none"
+    stroke="currentColor"
+    viewBox="0 0 24 24"
+  >
+    <path
+      stroke-linecap="round"
+      stroke-linejoin="round"
+      stroke-width="2"
+      d="M4 6h16M4 12h16M4 18h16"></path>
+  </svg>
+  <svg
+    id="menu-close-icon"
+    class="w-6 h-6 hidden"
+    fill="none"
+    stroke="currentColor"
+    viewBox="0 0 24 24"
+  >
+    <path
+      stroke-linecap="round"
+      stroke-linejoin="round"
+      stroke-width="2"
+      d="M6 18L18 6M6 6l12 12"></path>
+  </svg>
+</button>
+
 <!-- Overlay (para cerrar el menú al hacer click fuera) -->
 <div
   id="sidebar-overlay"
-  class="fixed inset-0 bg-black bg-opacity-50 z-30 lg:hidden hidden transition-opacity"
+  class="fixed inset-0 bg-black/80 backdrop-blur-sm z-30 lg:hidden hidden transition-opacity"
 >
 </div>
 
 <!-- Sidebar -->
 <section
   id="sidebar"
-  class="fixed top-0 left-0 z-40 h-screen w-64 bg-white border-r border-gray-200 transform -translate-x-full lg:translate-x-0 transition-transform duration-300 ease-in-out"
+  class="fixed top-0 left-0 z-40 h-screen w-64 bg-stone-900 border-r border-stone-800 transform -translate-x-full lg:translate-x-0 transition-transform duration-300 ease-in-out"
 >
   <div class="flex flex-col h-full">
     <!-- Logo/Header -->
-    <div class="flex items-center justify-between p-6 border-b border-gray-200">
+    <div
+      class="flex items-center justify-between p-6 border-b border-stone-800"
+    >
       <div class="flex items-center gap-3">
-        <div
-          class="w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center"
-        >
-          <svg
-            class="w-6 h-6 text-white"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              stroke-width="2"
-              d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"></path>
-          </svg>
-        </div>
+        <img
+          src="/logo.png"
+          alt="Capyte"
+          class="w-10 h-10 rounded-xl shadow-lg shadow-amber-900/20"
+        />
         <div>
-          <h2 class="text-lg font-bold text-gray-900">Capyte</h2>
-          <p class="text-xs text-gray-500">Admin Panel</p>
+          <h2 class="text-lg font-bold text-stone-100">Capyte</h2>
+          <p class="text-xs text-stone-500">Panel de Control</p>
         </div>
       </div>
       <!-- Botón cerrar (solo móvil) -->
       <button
         id="sidebar-close-button"
-        class="lg:hidden p-1 rounded hover:bg-gray-100"
+        class="lg:hidden p-1 rounded hover:bg-stone-800 text-stone-500 hover:text-stone-300"
         aria-label="Cerrar menú"
       >
         <svg
-          class="w-5 h-5 text-gray-500"
+          class="w-5 h-5"
           fill="none"
           stroke="currentColor"
           viewBox="0 0 24 24"
@@ -130,16 +155,16 @@ const menuItems = [
 
     <!-- Navigation -->
     <nav class="flex-1 overflow-y-auto p-3">
-      <ul class="space-y-0.5">
+      <ul class="space-y-1">
         {
           menuItems.map((item) => (
             <li>
               <a
                 href={item.href}
-                class={`flex items-center gap-2 px-4 py-2.5 rounded-lg transition-colors ${
+                class={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 ${
                   activePage === item.page
-                    ? "bg-blue-50 text-blue-600 font-medium"
-                    : "text-gray-700 hover:bg-gray-50"
+                    ? "bg-amber-500/10 text-amber-500 font-medium shadow-sm border border-amber-500/10"
+                    : "text-stone-400 hover:bg-stone-800 hover:text-stone-200 border border-transparent"
                 }`}
               >
                 {item.icon === "dashboard" && (
@@ -301,10 +326,10 @@ const menuItems = [
     </nav>
 
     <!-- User Section -->
-    <div class="p-4 border-t border-gray-200">
+    <div class="p-4 border-t border-stone-800">
       <a
         href="/auth/logout"
-        class="flex items-center gap-3 px-4 py-3 text-gray-700 hover:bg-gray-50 rounded-lg transition-colors"
+        class="flex items-center gap-3 px-4 py-3 text-stone-400 hover:bg-stone-800 hover:text-stone-200 rounded-xl transition-colors"
       >
         <svg
           class="w-5 h-5"

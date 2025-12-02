@@ -18,11 +18,14 @@
     "astro": "^5.15.9",
     "chart.js": "^4.5.1",
     "chartjs-node-canvas": "^5.0.0",
+    "nodemailer": "^7.0.11",
+    "resend": "^6.5.2",
     "tailwindcss": "^4.1.17",
     "zod": "^4.1.12"
   },
   "devDependencies": {
     "@types/jest": "^30.0.0",
+    "@types/nodemailer": "^7.0.4",
     "jest": "^30.2.0",
     "ts-jest": "^29.4.5"
   }

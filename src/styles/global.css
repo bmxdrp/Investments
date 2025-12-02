@@ -1,1 +1,40 @@
 @import "tailwindcss";
+
+@theme {
+  --animate-gradient-x: gradient-x 15s ease infinite;
+  --animate-float: float 6s ease-in-out infinite;
+  
+  @keyframes gradient-x {
+    0%, 100% {
+      background-size: 200% 200%;
+      background-position: left center;
+    }
+    50% {
+      background-size: 200% 200%;
+      background-position: right center;
+    }
+  }
+
+  @keyframes float {
+    0%, 100% {
+      transform: translateY(0);
+    }
+    50% {
+      transform: translateY(-20px);
+    }
+  }
+}
+
+@layer utilities {
+  .perspective-1000 {
+    perspective: 1000px;
+  }
+  
+  .rotate-y-6 {
+    transform: rotateY(6deg);
+  }
+  
+  .rotate-y-0 {
+    transform: rotateY(0deg);
+  }
+}

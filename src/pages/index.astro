@@ -2,19 +2,31 @@
 import Layout from "@layouts/home.astro";
 ---
 
-<Layout title="Capyte - Control de inversiones sin ansiedad">
+<Layout title="Capyte - Inversiones con la calma de un Capibara">
   <div
-    class="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900"
+    class="min-h-screen bg-stone-950 text-stone-200 selection:bg-amber-500/30"
   >
+    <!-- Background Gradients -->
+    <div class="fixed inset-0 z-0 pointer-events-none">
+      <div
+        class="absolute top-0 left-1/4 w-96 h-96 bg-amber-900/20 rounded-full blur-[128px]"
+      >
+      </div>
+      <div
+        class="absolute bottom-0 right-1/4 w-96 h-96 bg-teal-900/20 rounded-full blur-[128px]"
+      >
+      </div>
+    </div>
+
     <!-- Navigation -->
     <nav
-      class="fixed top-0 w-full bg-slate-900/80 backdrop-blur-lg border-b border-white/10 z-50"
+      class="fixed top-0 w-full bg-stone-950/80 backdrop-blur-xl border-b border-white/5 z-50"
     >
       <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div class="flex items-center justify-between h-16 sm:h-20">
           <div class="flex items-center gap-2 sm:gap-3">
             <div
-              class="w-8 h-8 sm:w-10 sm:h-10 bg-gradient-to-br from-blue-500 to-blue-600 rounded-lg flex items-center justify-center"
+              class="w-8 h-8 sm:w-10 sm:h-10 bg-gradient-to-br from-amber-500 to-orange-600 rounded-xl flex items-center justify-center shadow-lg shadow-orange-900/20"
             >
               <svg
                 class="w-5 h-5 sm:w-6 sm:h-6 text-white"
@@ -29,18 +41,21 @@ import Layout from "@layouts/home.astro";
                   d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"></path>
               </svg>
             </div>
-            <span class="text-lg sm:text-xl font-bold text-white">Capyte</span>
+            <span
+              class="text-lg sm:text-xl font-bold text-stone-100 tracking-tight"
+              >Capyte</span
+            >
           </div>
           <div class="flex items-center gap-2 sm:gap-4">
             <a
               href="/auth/login"
-              class="px-3 sm:px-4 py-2 text-sm sm:text-base text-slate-300 hover:text-white transition"
+              class="px-3 sm:px-4 py-2 text-sm sm:text-base text-stone-400 hover:text-stone-100 transition-colors"
             >
               Iniciar Sesión
             </a>
             <a
               href="/auth/register"
-              class="px-3 sm:px-4 py-2 text-sm sm:text-base bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold transition"
+              class="px-3 sm:px-4 py-2 text-sm sm:text-base bg-stone-100 hover:bg-white text-stone-900 rounded-lg font-bold transition-all hover:shadow-lg hover:shadow-stone-100/10"
             >
               Registro
             </a>
@@ -50,83 +65,154 @@ import Layout from "@layouts/home.astro";
     </nav>
 
     <!-- Hero Section -->
-    <section class="pt-24 sm:pt-32 pb-12 sm:pb-20 px-4 sm:px-6 lg:px-8">
+    <section
+      class="relative pt-32 sm:pt-40 pb-20 sm:pb-32 px-4 sm:px-6 lg:px-8 z-10"
+    >
       <div class="max-w-7xl mx-auto">
-        <div class="grid lg:grid-cols-2 gap-8 lg:gap-12 items-center">
+        <div class="grid lg:grid-cols-2 gap-12 lg:gap-20 items-center">
           <!-- Left Content -->
           <div class="text-center lg:text-left">
             <div
-              class="inline-block px-3 sm:px-4 py-1.5 sm:py-2 bg-blue-500/10 border border-blue-500/20 rounded-full mb-4 sm:mb-6"
+              class="inline-flex items-center gap-2 px-3 sm:px-4 py-1.5 sm:py-2 bg-stone-900/50 border border-stone-800 rounded-full mb-6 sm:mb-8 backdrop-blur-sm"
             >
-              <span class="text-xs sm:text-sm text-blue-400 font-medium"
-                >Control Total de tus Inversiones</span
+              <span class="w-2 h-2 rounded-full bg-amber-500 animate-pulse"
+              ></span>
+              <span class="text-xs sm:text-sm text-stone-300 font-medium"
+                >Tranquilidad financiera absoluta</span
               >
             </div>
             <h1
-              class="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-bold text-white mb-4 sm:mb-6 leading-tight"
+              class="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-bold text-white mb-6 sm:mb-8 leading-[1.1] tracking-tight"
             >
-              Gestiona tu portafolio con
+              Inversiones sólidas, <br />
               <span
-                class="bg-gradient-to-r from-blue-400 to-blue-600 bg-clip-text text-transparent"
+                class="text-transparent bg-clip-text bg-gradient-to-r from-amber-200 via-orange-400 to-amber-200 animate-gradient-x"
               >
-                inteligencia</span
-              >
+                mente en calma
+              </span>
             </h1>
             <p
-              class="text-base sm:text-lg md:text-xl text-slate-300 mb-6 sm:mb-8 max-w-2xl mx-auto lg:mx-0"
+              class="text-lg sm:text-xl text-stone-400 mb-8 sm:mb-10 max-w-2xl mx-auto lg:mx-0 leading-relaxed"
             >
-              Monitorea tus inversiones, realiza seguimiento de aportes y
-              retiros, y visualiza el crecimiento de tu patrimonio en tiempo
-              real.
+              La solidez de la tecnología avanzada se une a la simplicidad.
+              Gestiona tu patrimonio con la confianza y serenidad que mereces.
             </p>
             <div
-              class="flex flex-col sm:flex-row gap-3 sm:gap-4 justify-center lg:justify-start"
+              class="flex flex-col sm:flex-row gap-4 justify-center lg:justify-start"
             >
               <a
                 href="#"
-                class="px-6 sm:px-8 py-3 sm:py-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-semibold shadow-lg hover:shadow-blue-500/50 transition text-sm sm:text-base"
+                class="px-8 py-4 bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white rounded-xl font-bold shadow-xl shadow-orange-900/20 hover:shadow-orange-900/40 transition-all transform hover:-translate-y-0.5"
               >
-                Comenzar Gratis
+                Comenzar Ahora
               </a>
               <a
                 href="#features"
-                class="px-6 sm:px-8 py-3 sm:py-4 bg-white/10 hover:bg-white/20 text-white rounded-xl font-semibold border border-white/20 transition text-sm sm:text-base"
+                class="px-8 py-4 bg-stone-900/50 hover:bg-stone-800 text-stone-200 rounded-xl font-semibold border border-stone-800 hover:border-stone-700 transition-all backdrop-blur-sm"
               >
-                Ver Características
+                Explorar Sistema
               </a>
             </div>
           </div>
 
           <!-- Right Content - Dashboard Preview -->
-          <div class="relative hidden lg:block">
+          <div class="relative hidden lg:block perspective-1000">
+            <!-- Decorative Elements -->
             <div
-              class="absolute inset-0 bg-gradient-to-r from-blue-500 to-purple-500 rounded-2xl blur-3xl opacity-20"
+              class="absolute -top-10 -right-10 w-32 h-32 bg-amber-500/10 rounded-full blur-3xl"
             >
             </div>
             <div
-              class="relative bg-slate-800/50 backdrop-blur-xl border border-white/10 rounded-2xl p-6 shadow-2xl"
+              class="absolute -bottom-10 -left-10 w-32 h-32 bg-teal-500/10 rounded-full blur-3xl"
             >
-              <div class="flex items-center gap-2 mb-4">
-                <div class="w-3 h-3 rounded-full bg-red-500"></div>
-                <div class="w-3 h-3 rounded-full bg-yellow-500"></div>
-                <div class="w-3 h-3 rounded-full bg-green-500"></div>
-              </div>
-              <div class="space-y-4">
-                <div
-                  class="bg-gradient-to-r from-green-500/20 to-green-600/20 border border-green-500/30 rounded-lg p-4"
-                >
-                  <p class="text-xs text-green-400 mb-1">Total Invertido</p>
-                  <p class="text-2xl font-bold text-white">$125,450,000</p>
+            </div>
+
+            <div
+              class="relative bg-stone-900/80 backdrop-blur-xl border border-white/10 rounded-3xl p-8 shadow-2xl transform rotate-y-6 hover:rotate-y-0 transition-transform duration-700 ease-out"
+            >
+              <!-- Mockup Header -->
+              <div class="flex items-center justify-between mb-8">
+                <div class="flex items-center gap-4">
+                  <div
+                    class="w-12 h-12 rounded-full bg-stone-800 flex items-center justify-center border border-stone-700"
+                  >
+                    <span class="text-xl">🧘</span>
+                  </div>
+                  <div>
+                    <p class="text-sm text-stone-400">Patrimonio Total</p>
+                    <p class="text-2xl font-bold text-white">$125,450,000</p>
+                  </div>
                 </div>
-                <div class="grid grid-cols-2 gap-4">
-                  <div class="bg-slate-700/50 rounded-lg p-3">
-                    <p class="text-xs text-slate-400 mb-1">Aportes</p>
-                    <p class="text-lg font-semibold text-white">$98M</p>
+                <div
+                  class="px-3 py-1 rounded-full bg-teal-500/10 border border-teal-500/20 text-teal-400 text-sm font-medium"
+                >
+                  +2.4% este mes
+                </div>
+              </div>
+
+              <!-- Mockup Chart Area -->
+              <div
+                class="h-48 bg-gradient-to-b from-stone-800/50 to-transparent rounded-xl border border-stone-800 p-4 mb-6 relative overflow-hidden group"
+              >
+                <div
+                  class="absolute inset-0 flex items-end justify-between px-4 pb-4 opacity-50"
+                >
+                  <div class="w-2 bg-stone-700 h-12 rounded-t"></div>
+                  <div class="w-2 bg-stone-700 h-16 rounded-t"></div>
+                  <div class="w-2 bg-stone-700 h-10 rounded-t"></div>
+                  <div class="w-2 bg-stone-700 h-24 rounded-t"></div>
+                  <div class="w-2 bg-stone-700 h-20 rounded-t"></div>
+                  <div
+                    class="w-2 bg-amber-600 h-32 rounded-t shadow-[0_0_15px_rgba(217,119,6,0.5)]"
+                  >
                   </div>
-                  <div class="bg-slate-700/50 rounded-lg p-3">
-                    <p class="text-xs text-slate-400 mb-1">Retiros</p>
-                    <p class="text-lg font-semibold text-white">$12M</p>
+                  <div class="w-2 bg-stone-700 h-28 rounded-t"></div>
+                </div>
+                <!-- Line Chart Overlay -->
+                <svg
+                  class="absolute inset-0 w-full h-full p-4"
+                  viewBox="0 0 100 50"
+                  preserveAspectRatio="none"
+                >
+                  <path
+                    d="M0 40 Q 25 35, 50 20 T 100 10"
+                    fill="none"
+                    stroke="url(#gradient)"
+                    stroke-width="2"></path>
+                  <defs>
+                    <linearGradient
+                      id="gradient"
+                      x1="0%"
+                      y1="0%"
+                      x2="100%"
+                      y2="0%"
+                    >
+                      <stop offset="0%" stop-color="#78716c"></stop>
+                      <stop offset="100%" stop-color="#d97706"></stop>
+                    </linearGradient>
+                  </defs>
+                </svg>
+              </div>
+
+              <!-- Mockup Stats Grid -->
+              <div class="grid grid-cols-2 gap-4">
+                <div
+                  class="bg-stone-800/50 rounded-xl p-4 border border-stone-700/50"
+                >
+                  <div class="flex items-center gap-2 mb-2">
+                    <div class="w-2 h-2 rounded-full bg-teal-500"></div>
+                    <p class="text-xs text-stone-400">Aportes</p>
                   </div>
+                  <p class="text-lg font-semibold text-stone-200">$98M</p>
+                </div>
+                <div
+                  class="bg-stone-800/50 rounded-xl p-4 border border-stone-700/50"
+                >
+                  <div class="flex items-center gap-2 mb-2">
+                    <div class="w-2 h-2 rounded-full bg-orange-500"></div>
+                    <p class="text-xs text-stone-400">Rendimiento</p>
+                  </div>
+                  <p class="text-lg font-semibold text-stone-200">$27M</p>
                 </div>
               </div>
             </div>
@@ -138,30 +224,32 @@ import Layout from "@layouts/home.astro";
     <!-- Features Section -->
     <section
       id="features"
-      class="py-12 sm:py-20 px-4 sm:px-6 lg:px-8 bg-slate-800/30"
+      class="py-20 sm:py-32 px-4 sm:px-6 lg:px-8 bg-stone-900/30 relative"
     >
       <div class="max-w-7xl mx-auto">
-        <div class="text-center mb-12 sm:mb-16">
+        <div class="text-center mb-16 sm:mb-24">
           <h2
-            class="text-2xl sm:text-3xl md:text-4xl font-bold text-white mb-3 sm:mb-4"
+            class="text-3xl sm:text-4xl md:text-5xl font-bold text-white mb-6"
           >
-            Todo lo que necesitas para gestionar tus inversiones
+            Tecnología robusta, <br />
+            <span class="text-stone-400">experiencia zen</span>
           </h2>
-          <p class="text-base sm:text-lg text-slate-300 max-w-2xl mx-auto">
-            Herramientas poderosas diseñadas para inversionistas inteligentes
+          <p class="text-lg text-stone-400 max-w-2xl mx-auto">
+            Hemos simplificado lo complejo. Una plataforma potente que te da paz
+            mental.
           </p>
         </div>
 
-        <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-6 sm:gap-8">
+        <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-8">
           <!-- Feature 1 -->
           <div
-            class="bg-slate-800/50 backdrop-blur-xl border border-white/10 rounded-2xl p-6 sm:p-8 hover:border-blue-500/50 transition group"
+            class="group bg-stone-900/50 backdrop-blur-sm border border-stone-800 rounded-2xl p-8 hover:bg-stone-900 hover:border-amber-500/20 transition-all duration-300"
           >
             <div
-              class="w-12 h-12 sm:w-14 sm:h-14 bg-blue-500/10 rounded-xl flex items-center justify-center mb-4 sm:mb-6 group-hover:bg-blue-500/20 transition"
+              class="w-14 h-14 bg-stone-800 rounded-xl flex items-center justify-center mb-6 group-hover:scale-110 transition-transform duration-300 border border-stone-700 group-hover:border-amber-500/30"
             >
               <svg
-                class="w-6 h-6 sm:w-7 sm:h-7 text-blue-400"
+                class="w-7 h-7 text-amber-500"
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"
@@ -169,31 +257,27 @@ import Layout from "@layouts/home.astro";
                 <path
                   stroke-linecap="round"
                   stroke-linejoin="round"
-                  stroke-width="2"
+                  stroke-width="1.5"
                   d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"
                 ></path>
               </svg>
             </div>
-            <h3
-              class="text-lg sm:text-xl font-semibold text-white mb-2 sm:mb-3"
-            >
-              Seguimiento en Tiempo Real
-            </h3>
-            <p class="text-sm sm:text-base text-slate-300">
-              Monitorea el valor de tu portafolio actualizado con las últimas
-              tasas de cambio.
+            <h3 class="text-xl font-bold text-stone-100 mb-3">Visión Clara</h3>
+            <p class="text-stone-400 leading-relaxed">
+              Sin ruido visual. Solo los datos que importan, presentados con una
+              claridad cristalina.
             </p>
           </div>
 
           <!-- Feature 2 -->
           <div
-            class="bg-slate-800/50 backdrop-blur-xl border border-white/10 rounded-2xl p-6 sm:p-8 hover:border-blue-500/50 transition group"
+            class="group bg-stone-900/50 backdrop-blur-sm border border-stone-800 rounded-2xl p-8 hover:bg-stone-900 hover:border-teal-500/20 transition-all duration-300"
           >
             <div
-              class="w-12 h-12 sm:w-14 sm:h-14 bg-green-500/10 rounded-xl flex items-center justify-center mb-4 sm:mb-6 group-hover:bg-green-500/20 transition"
+              class="w-14 h-14 bg-stone-800 rounded-xl flex items-center justify-center mb-6 group-hover:scale-110 transition-transform duration-300 border border-stone-700 group-hover:border-teal-500/30"
             >
               <svg
-                class="w-6 h-6 sm:w-7 sm:h-7 text-green-400"
+                class="w-7 h-7 text-teal-500"
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"
@@ -201,30 +285,28 @@ import Layout from "@layouts/home.astro";
                 <path
                   stroke-linecap="round"
                   stroke-linejoin="round"
-                  stroke-width="2"
-                  d="M7 11l5-5m0 0l5 5m-5-5v12"></path>
+                  stroke-width="1.5"
+                  d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
               </svg>
             </div>
-            <h3
-              class="text-lg sm:text-xl font-semibold text-white mb-2 sm:mb-3"
-            >
-              Gestión de Aportes
+            <h3 class="text-xl font-bold text-stone-100 mb-3">
+              Histórico Inmutable
             </h3>
-            <p class="text-sm sm:text-base text-slate-300">
-              Registra tus inversiones fácilmente y mantén un historial completo
-              de todos tus aportes.
+            <p class="text-stone-400 leading-relaxed">
+              Registro confiable y seguro de cada movimiento. Tu historia
+              financiera, protegida.
             </p>
           </div>
 
           <!-- Feature 3 -->
           <div
-            class="bg-slate-800/50 backdrop-blur-xl border border-white/10 rounded-2xl p-6 sm:p-8 hover:border-blue-500/50 transition group"
+            class="group bg-stone-900/50 backdrop-blur-sm border border-stone-800 rounded-2xl p-8 hover:bg-stone-900 hover:border-orange-500/20 transition-all duration-300"
           >
             <div
-              class="w-12 h-12 sm:w-14 sm:h-14 bg-red-500/10 rounded-xl flex items-center justify-center mb-4 sm:mb-6 group-hover:bg-red-500/20 transition"
+              class="w-14 h-14 bg-stone-800 rounded-xl flex items-center justify-center mb-6 group-hover:scale-110 transition-transform duration-300 border border-stone-700 group-hover:border-orange-500/30"
             >
               <svg
-                class="w-6 h-6 sm:w-7 sm:h-7 text-red-400"
+                class="w-7 h-7 text-orange-500"
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"
@@ -232,113 +314,14 @@ import Layout from "@layouts/home.astro";
                 <path
                   stroke-linecap="round"
                   stroke-linejoin="round"
-                  stroke-width="2"
-                  d="M17 13l-5 5m0 0l-5-5m5 5V6"></path>
+                  stroke-width="1.5"
+                  d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
               </svg>
             </div>
-            <h3
-              class="text-lg sm:text-xl font-semibold text-white mb-2 sm:mb-3"
-            >
-              Control de Retiros
-            </h3>
-            <p class="text-sm sm:text-base text-slate-300">
-              Administra tus retiros y visualiza el impacto en tu portafolio de
-              manera instantánea.
-            </p>
-          </div>
-
-          <!-- Feature 4 -->
-          <div
-            class="bg-slate-800/50 backdrop-blur-xl border border-white/10 rounded-2xl p-6 sm:p-8 hover:border-blue-500/50 transition group"
-          >
-            <div
-              class="w-12 h-12 sm:w-14 sm:h-14 bg-purple-500/10 rounded-xl flex items-center justify-center mb-4 sm:mb-6 group-hover:bg-purple-500/20 transition"
-            >
-              <svg
-                class="w-6 h-6 sm:w-7 sm:h-7 text-purple-400"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  stroke-width="2"
-                  d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-                ></path>
-              </svg>
-            </div>
-            <h3
-              class="text-lg sm:text-xl font-semibold text-white mb-2 sm:mb-3"
-            >
-              Múltiples Monedas
-            </h3>
-            <p class="text-sm sm:text-base text-slate-300">
-              Gestiona inversiones en COP y USD con conversión automática según
-              tasas actualizadas.
-            </p>
-          </div>
-
-          <!-- Feature 5 -->
-          <div
-            class="bg-slate-800/50 backdrop-blur-xl border border-white/10 rounded-2xl p-6 sm:p-8 hover:border-blue-500/50 transition group"
-          >
-            <div
-              class="w-12 h-12 sm:w-14 sm:h-14 bg-orange-500/10 rounded-xl flex items-center justify-center mb-4 sm:mb-6 group-hover:bg-orange-500/20 transition"
-            >
-              <svg
-                class="w-6 h-6 sm:w-7 sm:h-7 text-orange-400"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  stroke-width="2"
-                  d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-              </svg>
-            </div>
-            <h3
-              class="text-lg sm:text-xl font-semibold text-white mb-2 sm:mb-3"
-            >
-              Historial Completo
-            </h3>
-            <p class="text-sm sm:text-base text-slate-300">
-              Accede a un registro detallado de todas tus transacciones
-              organizadas por mes.
-            </p>
-          </div>
-
-          <!-- Feature 6 -->
-          <div
-            class="bg-slate-800/50 backdrop-blur-xl border border-white/10 rounded-2xl p-6 sm:p-8 hover:border-blue-500/50 transition group"
-          >
-            <div
-              class="w-12 h-12 sm:w-14 sm:h-14 bg-cyan-500/10 rounded-xl flex items-center justify-center mb-4 sm:mb-6 group-hover:bg-cyan-500/20 transition"
-            >
-              <svg
-                class="w-6 h-6 sm:w-7 sm:h-7 text-cyan-400"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  stroke-width="2"
-                  d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"
-                ></path>
-              </svg>
-            </div>
-            <h3
-              class="text-lg sm:text-xl font-semibold text-white mb-2 sm:mb-3"
-            >
-              Cuentas Organizadas
-            </h3>
-            <p class="text-sm sm:text-base text-slate-300">
-              Crea y administra múltiples cuentas con soporte para subcuentas
-              jerárquicas.
+            <h3 class="text-xl font-bold text-stone-100 mb-3">Control Total</h3>
+            <p class="text-stone-400 leading-relaxed">
+              Gestiona aportes y retiros con la solidez de un sistema bancario,
+              pero sin la burocracia.
             </p>
           </div>
         </div>
@@ -346,50 +329,37 @@ import Layout from "@layouts/home.astro";
     </section>
 
     <!-- CTA Section -->
-    <section class="py-12 sm:py-20 px-4 sm:px-6 lg:px-8">
-      <div class="max-w-4xl mx-auto text-center">
+    <section class="py-20 sm:py-32 px-4 sm:px-6 lg:px-8">
+      <div class="max-w-5xl mx-auto">
         <div
-          class="bg-gradient-to-r from-blue-600 to-purple-600 rounded-3xl p-8 sm:p-12 lg:p-16 shadow-2xl relative overflow-hidden"
+          class="relative bg-gradient-to-br from-stone-900 to-stone-950 rounded-[2.5rem] p-8 sm:p-16 overflow-hidden border border-stone-800 text-center"
         >
+          <!-- Glow Effects -->
           <div
-            class="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHZpZXdCb3g9IjAgMCA2MCA2MCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48ZyBmaWxsPSJub25lIiBmaWxsLXJ1bGU9ImV2ZW5vZGQiPjxnIGZpbGw9IiNmZmYiIGZpbGwtb3BhY2l0eT0iMC4xIj48cGF0aCBkPSJNMzYgMzRjMC0yLjIxLTEuNzktNC00LTRzLTQgMS43OS00IDQgMS43OSA0IDQgNCA0LTEuNzkgNC00em0wLTEwYzAtMi4yMS0xLjc5LTQtNC00cy00IDEuNzktNCA0IDEuNzkgNCA0IDQgNC0xLjc5IDQtNHoiLz48L2c+PC9nPjwvc3ZnPg==')] opacity-10"
+            class="absolute top-0 left-1/2 -translate-x-1/2 w-full h-full max-w-lg bg-amber-500/10 blur-[100px] rounded-full pointer-events-none"
           >
           </div>
-          <div class="relative">
+
+          <div class="relative z-10">
             <h2
-              class="text-2xl sm:text-3xl md:text-4xl font-bold text-white mb-3 sm:mb-4"
+              class="text-3xl sm:text-4xl md:text-5xl font-bold text-white mb-6"
             >
-              ¿Listo para tomar el control?
+              Empieza tu camino hacia la <br />
+              <span class="text-amber-500">tranquilidad financiera</span>
             </h2>
             <p
-              class="text-base sm:text-lg md:text-xl text-blue-100 mb-6 sm:mb-8 max-w-2xl mx-auto"
+              class="text-lg sm:text-xl text-stone-400 mb-10 max-w-2xl mx-auto"
             >
-              Únete hoy y comienza a gestionar tus inversiones de manera
-              profesional y eficiente.
+              Únete a los inversionistas que han decidido dejar atrás el estrés
+              y gestionar su patrimonio con inteligencia.
             </p>
             <a
               href="#"
-              class="inline-block px-6 sm:px-8 py-3 sm:py-4 bg-white text-blue-600 rounded-xl font-semibold shadow-lg hover:shadow-xl hover:scale-105 transition text-sm sm:text-base"
+              class="inline-flex items-center gap-2 px-8 py-4 bg-white text-stone-950 rounded-xl font-bold hover:bg-stone-200 transition-colors shadow-lg shadow-white/5"
             >
-              Crear Cuenta Gratis
-            </a>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <!-- Footer -->
-    <footer class="py-8 sm:py-12 px-4 sm:px-6 lg:px-8 border-t border-white/10">
-      <div class="max-w-7xl mx-auto">
-        <div
-          class="flex flex-col sm:flex-row items-center justify-between gap-4"
-        >
-          <div class="flex items-center gap-2 sm:gap-3">
-            <div
-              class="w-8 h-8 bg-gradient-to-br from-blue-500 to-blue-600 rounded-lg flex items-center justify-center"
-            >
+              <span>Crear Cuenta Gratis</span>
               <svg
-                class="w-5 h-5 text-white"
+                class="w-5 h-5"
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"
@@ -398,16 +368,43 @@ import Layout from "@layouts/home.astro";
                   stroke-linecap="round"
                   stroke-linejoin="round"
                   stroke-width="2"
-                  d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"></path>
+                  d="M17 8l4 4m0 0l-4 4m4-4H3"></path>
               </svg>
-            </div>
-            <span class="text-base sm:text-lg font-bold text-white">Capyte</span
-            >
+            </a>
           </div>
-          <p class="text-xs sm:text-sm text-slate-400 text-center sm:text-left">
-            © 2025 Capyte. Todos los derechos reservados.
-          </p>
         </div>
+      </div>
+    </section>
+
+    <!-- Footer -->
+    <footer
+      class="py-12 px-4 sm:px-6 lg:px-8 border-t border-stone-900 bg-stone-950"
+    >
+      <div
+        class="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-6"
+      >
+        <div class="flex items-center gap-3">
+          <div
+            class="w-8 h-8 bg-stone-800 rounded-lg flex items-center justify-center border border-stone-700"
+          >
+            <svg
+              class="w-4 h-4 text-amber-500"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"></path>
+            </svg>
+          </div>
+          <span class="text-lg font-bold text-stone-300">Capyte</span>
+        </div>
+        <p class="text-sm text-stone-500">
+          © 2025 Capyte. Construido con solidez y calma.
+        </p>
       </div>
     </footer>
   </div>
