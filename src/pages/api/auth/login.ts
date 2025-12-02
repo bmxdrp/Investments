@@ -12,8 +12,8 @@ const loginSchema = z.object({
 export const POST: APIRoute = async ({ request }) => {
   try {
     const url = new URL(request.url);
-    const raw = url.searchParams.get("returnTo") || "/admin";
-    const returnTo = raw.startsWith("/") ? raw : "/admin";
+    const raw = url.searchParams.get("returnTo") || "/dashboard";
+    const returnTo = raw.startsWith("/") ? raw : "/dashboard";
 
 
     const form = Object.fromEntries(await request.formData());

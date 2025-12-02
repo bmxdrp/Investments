@@ -32,6 +32,7 @@ const accounts = asRows<{
       LIMIT 1
     ) pv ON true
     WHERE a.currency IN ('COP', 'USD')
+    AND a.user_id = ${userId}
     ORDER BY a.name;
   `,
 );
@@ -243,7 +244,7 @@ const today = new Date().toLocaleDateString("en-CA", {
               Retirar Fondos
             </button>
             <a
-              href="/admin"
+              href="/dashboard"
               class="w-full sm:flex-1 bg-gray-100 text-gray-700 px-6 py-2.5 sm:py-3 rounded-lg font-medium hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 transition text-center text-sm sm:text-base"
             >
               Cancelar

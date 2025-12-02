@@ -5,16 +5,35 @@ import Sidebar from "@components/dashboard/sidebar.astro";
 interface Props {
   title?: string;
   activePage: string;
+  description?: string;
+  noIndex?: boolean;
 }
 
-const { title, activePage } = Astro.props;
+const {
+  title = "Dashboard - Capyte",
+  activePage,
+  description = "Panel de control de inversiones - Capyte",
+  noIndex = true, // Dashboard pages should not be indexed
+} = Astro.props;
 ---
 
+<!doctype html>
 <html lang="es">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
     <title>{title}</title>
+    <meta name="description" content={description} />
+
+    <!-- Prevent indexing of private dashboard pages -->
+    {noIndex && <meta name="robots" content="noindex, nofollow" />}
+
+    <!-- Favicon -->
+    <link rel="icon" type="image/png" href="/logo.png" />
+
+    <!-- Theme Color -->
+    <meta name="theme-color" content="#1c1917" />
   </head>
   <body class="min-h-screen bg-stone-950">
     <div class="flex flex-row justify-between min-h-screen bg-stone-50 w-full">

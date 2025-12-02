@@ -44,22 +44,10 @@ const menuItems = [
     page: "activity",
   },
   {
-    name: "Tasa de cambio",
-    href: "/dashboard/exchange",
-    icon: "exchange",
-    page: "exchange",
-  },
-  {
     name: "Historial",
     href: "/dashboard/history",
     icon: "history",
     page: "history",
-  },
-  {
-    name: "Gráficos",
-    href: "/dashboard/portfolio-history",
-    icon: "chart",
-    page: "portfolio-history",
   },
   {
     name: "Estadísticas",
@@ -125,7 +113,7 @@ const menuItems = [
         <img
           src="/logo.png"
           alt="Capyte"
-          class="w-10 h-10 rounded-xl shadow-lg shadow-amber-900/20"
+          class="w-10 h-10 rounded-xl shadow-lg shadow-amber-900/20 bg-white"
         />
         <div>
           <h2 class="text-lg font-bold text-stone-100">Capyte</h2>
@@ -269,21 +257,6 @@ const menuItems = [
                       stroke-linejoin="round"
                       stroke-width="2"
                       d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"
-                    />
-                  </svg>
-                )}
-                {item.icon === "exchange" && (
-                  <svg
-                    class="w-5 h-5"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      stroke-width="2"
-                      d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
                     />
                   </svg>
                 )}

@@ -34,6 +34,7 @@ LEFT JOIN LATERAL (
     t.id DESC
   LIMIT 1
 ) tx ON true
+WHERE a.user_id = ${userId}
 ORDER BY a.name ASC;
 `;
 
@@ -309,7 +310,7 @@ const today = new Date()
                     class="pt-4 flex items-center justify-end gap-3 border-t border-gray-100"
                 >
                     <a
-                        href="/admin"
+                        href="/dashboard"
                         class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50"
                     >
                         Cancelar
@@ -403,7 +404,6 @@ const today = new Date()
 
             if (!fromOption || !fromOption.value) {
                 currencyLabel.textContent = "---";
-                balanceInfo.textContent = "Selecciona una cuenta de origen";
             } else {
                 const fromCurrency = fromOption.dataset.currency;
                 const balance = parseFloat(fromOption.dataset.balance);

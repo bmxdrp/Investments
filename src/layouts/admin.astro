@@ -3,11 +3,16 @@ import "@styles/global.css";
 import Sidebar from "@components/admin/sidebar.astro";
 
 interface Props {
-    title: string;
+    title?: string;
     activePage: string;
+    description?: string;
 }
 
-const { title, activePage } = Astro.props;
+const {
+    title = "Admin - Capyte",
+    activePage,
+    description = "Panel de administración - Capyte",
+} = Astro.props;
 ---
 
 <!doctype html>
@@ -15,7 +20,18 @@ const { title, activePage } = Astro.props;
     <head>
         <meta charset="UTF-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-        <title>{title} - Capyte Admin</title>
+
+        <title>{title}</title>
+        <meta name="description" content={description} />
+
+        <!-- Prevent indexing of admin pages -->
+        <meta name="robots" content="noindex, nofollow" />
+
+        <!-- Favicon -->
+        <link rel="icon" type="image/png" href="/logo.png" />
+
+        <!-- Theme Color -->
+        <meta name="theme-color" content="#1c1917" />
     </head>
     <body class="bg-stone-950">
         <Sidebar activePage={activePage} />
