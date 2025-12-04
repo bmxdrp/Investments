@@ -1,10 +1,11 @@
 import type { APIRoute } from "astro";
 import { sql } from "@lib/db";
 
-export const GET: APIRoute = async ({ request }) => {
+export const POST: APIRoute = async ({ request }) => {
   try {
-    const url = new URL(request.url);
-    const token = url.searchParams.get("token");
+    // Read token from request body
+    const body = await request.json();
+    const token = body?.token;
 
     // 🔐 BLOQUEO TOTAL SI NO ES VERCEL
     if (token !== import.meta.env.CRON_SECRET) {
@@ -37,8 +38,8 @@ export const GET: APIRoute = async ({ request }) => {
 
     // ✅ UPSERT seguro
     await sql`
-      INSERT INTO exchange_rates (date, usd_to_cop)
-      VALUES (${today}, ${rate})
+      INSERT INTO exchange_rates (date, usd_to_cop,notes)
+      VALUES (${today}, ${rate}, "Cron job")
       ON CONFLICT (date) DO UPDATE SET
         usd_to_cop = ${rate};
     `;
