@@ -1,6 +1,8 @@
 ---
 import "@styles/global.css";
 import Sidebar from "@components/dashboard/sidebar.astro";
+import { ClientRouter } from "astro:transitions";
+import PWAHead from "@components/PWAHead.astro";
 
 interface Props {
   title?: string;
@@ -13,12 +15,12 @@ const {
   title = "Dashboard - Capyte",
   activePage,
   description = "Panel de control de inversiones - Capyte",
-  noIndex = true, // Dashboard pages should not be indexed
+  noIndex = true,
 } = Astro.props;
 ---
 
 <!doctype html>
-<html lang="es">
+<html lang="es" transition:animate="fade">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -26,25 +28,125 @@ const {
     <title>{title}</title>
     <meta name="description" content={description} />
 
-    <!-- Prevent indexing of private dashboard pages -->
     {noIndex && <meta name="robots" content="noindex, nofollow" />}
 
-    <!-- Favicon -->
     <link rel="icon" type="image/png" href="/logo.png" />
-
-    <!-- Theme Color -->
     <meta name="theme-color" content="#1c1917" />
+
+    <PWAHead />
+
+    <ClientRouter />
+
+    <style is:global>
+      /* Zen Animations */
+      @keyframes fadeInUp {
+        from {
+          opacity: 0;
+          transform: translateY(10px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+
+      .animate-zen-fade-up {
+        animation: fadeInUp 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+      }
+
+      .stagger-1 {
+        animation-delay: 50ms;
+      }
+      .stagger-2 {
+        animation-delay: 100ms;
+      }
+      .stagger-3 {
+        animation-delay: 150ms;
+      }
+      .stagger-4 {
+        animation-delay: 200ms;
+      }
+      .stagger-5 {
+        animation-delay: 250ms;
+      }
+
+      /* Smooth inputs transition */
+      input,
+      select,
+      textarea,
+      button,
+      a {
+        transition-property: color, background-color, border-color,
+          text-decoration-color, fill, stroke, opacity, box-shadow, transform,
+          filter, backdrop-filter;
+        transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+        transition-duration: 200ms;
+      }
+
+      /* Custom Scrollbar for Zen look */
+      ::-webkit-scrollbar {
+        width: 8px;
+        height: 8px;
+      }
+      ::-webkit-scrollbar-track {
+        background: transparent;
+      }
+      ::-webkit-scrollbar-thumb {
+        background: #d6d3d1;
+        border-radius: 4px;
+      }
+      ::-webkit-scrollbar-thumb:hover {
+        background: #a8a29e;
+      }
+    </style>
   </head>
-  <body class="min-h-screen bg-stone-950">
-    <div class="flex flex-row justify-between min-h-screen bg-stone-50 w-full">
-      <aside class="lg:w-64">
+  <body
+    class="min-h-screen bg-stone-50 text-stone-900 font-sans antialiased selection:bg-blue-100 selection:text-blue-900"
+  >
+    <div class="flex flex-row justify-between min-h-screen w-full relative">
+      <aside
+        class="lg:w-72 hidden lg:block h-screen fixed top-0 left-0 bg-white border-r border-stone-100 z-50"
+      >
         <Sidebar activePage={activePage} />
       </aside>
+
+      <!-- Mobile Sidebar Placeholder/Logic managed inside Sidebar component but we need structure -->
+      <div class="lg:hidden">
+        <Sidebar activePage={activePage} />
+      </div>
+
       <main
-        class="flex-1 w-full p-4 sm:p-6 lg:p-8 pt-16 md:pt-8 overflow-y-auto"
+        class="flex-1 w-full lg:ml-72 p-6 lg:p-12 pt-20 lg:pt-12 min-h-screen"
+        transition:animate="slide"
       >
-        <slot />
+        <div class="max-w-6xl mx-auto animate-zen-fade-up">
+          <slot />
+        </div>
       </main>
     </div>
+
+    <!-- PWA Cache Warmer -->
+    <script is:inline>
+      if ("serviceWorker" in navigator) {
+        window.addEventListener("load", () => {
+          // Esperar un momento para no afectar la carga inicial
+          setTimeout(() => {
+            const routesToCache = [
+              "/dashboard",
+              "/dashboard/accounts",
+              "/dashboard/contribute",
+              "/dashboard/withdraw",
+              "/dashboard/history",
+            ];
+
+            routesToCache.forEach((route) => {
+              fetch(route).catch((err) =>
+                console.log("Cache warm failed for", route),
+              );
+            });
+          }, 3000);
+        });
+      }
+    </script>
   </body>
 </html>

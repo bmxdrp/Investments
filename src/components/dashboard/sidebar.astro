@@ -36,33 +36,34 @@ const menuItems = [
     href: "/dashboard/transfer",
     icon: "transfer",
     page: "transfer",
-  },
+  }, // Enlace agregado para consistencia
   {
-    name: "Ganancias",
+    name: "Actividad",
     href: "/dashboard/activity",
     icon: "activity",
     page: "activity",
   },
+  { name: "Metas", href: "/dashboard/goals", icon: "goals", page: "goals" },
   {
-    name: "Historial",
-    href: "/dashboard/history",
-    icon: "history",
-    page: "history",
+    name: "Alertas",
+    href: "/dashboard/alerts",
+    icon: "alerts",
+    page: "alerts",
   },
   {
-    name: "Estadísticas",
-    href: "/dashboard/statistics",
-    icon: "stats",
-    page: "statistics",
+    name: "Ajustes",
+    href: "/dashboard/settings",
+    icon: "settings",
+    page: "settings",
   },
 ];
 ---
 
-<!-- Mobile Menu Button (visible solo en móvil) -->
+<!-- Mobile Menu Button with Zen Blur -->
 <button
   id="mobile-menu-button"
   type="button"
-  class="fixed top-4 left-4 z-50 lg:hidden p-2 rounded-lg bg-stone-900 shadow-lg border border-stone-800 text-stone-400 hover:text-white transition-colors"
+  class="fixed top-4 left-4 z-50 lg:hidden p-2.5 rounded-xl bg-white/90 backdrop-blur-md shadow-sm border border-stone-200 text-stone-600 hover:text-stone-900 transition-all hover:scale-105 active:scale-95"
 >
   <svg
     id="menu-open-icon"
@@ -92,324 +93,310 @@ const menuItems = [
   </svg>
 </button>
 
-<!-- Overlay (para cerrar el menú al hacer click fuera) -->
+<!-- Overlay with Smooth Fade -->
 <div
   id="sidebar-overlay"
-  class="fixed inset-0 bg-black/80 backdrop-blur-sm z-30 lg:hidden hidden transition-opacity"
+  class="fixed inset-0 bg-stone-900/40 backdrop-blur-sm z-40 lg:hidden hidden transition-opacity duration-300"
 >
 </div>
 
-<!-- Sidebar -->
-<section
-  id="sidebar"
-  class="fixed top-0 left-0 z-40 h-screen w-64 bg-stone-900 border-r border-stone-800 transform -translate-x-full lg:translate-x-0 transition-transform duration-300 ease-in-out"
->
-  <div class="flex flex-col h-full">
-    <!-- Logo/Header -->
-    <div
-      class="flex items-center justify-between p-6 border-b border-stone-800"
-    >
-      <div class="flex items-center gap-3">
-        <img
-          src="/logo.png"
-          alt="Capyte"
-          class="w-10 h-10 rounded-xl shadow-lg shadow-amber-900/20 bg-white"
-        />
-        <div>
-          <h2 class="text-lg font-bold text-stone-100">Capyte</h2>
-          <p class="text-xs text-stone-500">Panel de Control</p>
-        </div>
-      </div>
-      <!-- Botón cerrar (solo móvil) -->
-      <button
-        id="sidebar-close-button"
-        class="lg:hidden p-1 rounded hover:bg-stone-800 text-stone-500 hover:text-stone-300"
-        aria-label="Cerrar menú"
+<!-- Sidebar: Zen Design -->
+<aside id="sidebar" class="h-full flex flex-col bg-white">
+  <!-- Header Minimalista -->
+  <div class="flex items-center gap-4 px-8 py-8">
+    <div class="relative group">
+      <div
+        class="absolute -inset-1 bg-gradient-to-r from-blue-100 to-indigo-100 rounded-2xl blur-sm opacity-50 group-hover:opacity-100 transition duration-500"
       >
-        <svg
-          class="w-5 h-5"
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
-        >
-          <path
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            stroke-width="2"
-            d="M6 18L18 6M6 6l12 12"></path>
-        </svg>
-      </button>
+      </div>
+      <img
+        src="/logo.png"
+        alt="Capyte"
+        class="relative w-12 h-12 rounded-xl shadow-sm bg-white p-1"
+      />
     </div>
+    <div>
+      <h2 class="text-xl font-bold text-stone-900 tracking-tight">Capyte</h2>
+      <p class="text-xs font-medium text-stone-400 uppercase tracking-widest">
+        Finance
+      </p>
+    </div>
+  </div>
 
-    <!-- Navigation -->
-    <nav class="flex-1 overflow-y-auto p-3">
-      <ul class="space-y-1">
-        {
-          menuItems.map((item) => (
+  <!-- Navigation -->
+  <nav class="flex-1 overflow-y-auto px-4 py-2 custom-scrollbar">
+    <ul class="space-y-1.5">
+      {
+        menuItems.map((item) => {
+          const isActive = activePage === item.page;
+          return (
             <li>
               <a
                 href={item.href}
-                class={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 ${
-                  activePage === item.page
-                    ? "bg-amber-500/10 text-amber-500 font-medium shadow-sm border border-amber-500/10"
-                    : "text-stone-400 hover:bg-stone-800 hover:text-stone-200 border border-transparent"
-                }`}
+                class={`group flex items-center gap-3.5 px-4 py-3.5 rounded-2xl transition-all duration-300 ease-out
+                ${
+                  isActive
+                    ? "bg-slate-900 text-white shadow-lg shadow-slate-900/20 translate-x-1"
+                    : "text-stone-500 hover:bg-stone-50 hover:text-stone-900 hover:translate-x-1"
+                }
+              `}
               >
-                {item.icon === "dashboard" && (
-                  <svg
-                    class="w-5 h-5"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      stroke-width="2"
-                      d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"
-                    />
-                  </svg>
-                )}
-                {item.icon === "accounts" && (
-                  <svg
-                    class="w-5 h-5"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      stroke-width="2"
-                      d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"
-                    />
-                  </svg>
-                )}
-                {item.icon === "contribute" && (
-                  <svg
-                    class="w-5 h-5"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      stroke-width="2"
-                      d="M7 11l5-5m0 0l5 5m-5-5v12"
-                    />
-                  </svg>
-                )}
-                {item.icon === "withdraw" && (
-                  <svg
-                    class="w-5 h-5"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      stroke-width="2"
-                      d="M17 13l-5 5m0 0l-5-5m5 5V6"
-                    />
-                  </svg>
-                )}
-                {item.icon === "transfer" && (
-                  <svg
-                    class="w-5 h-5"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      stroke-width="2"
-                      d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"
-                    />
-                  </svg>
-                )}
-                {item.icon === "history" && (
-                  <svg
-                    class="w-5 h-5"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      stroke-width="2"
-                      d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
-                    />
-                  </svg>
-                )}
-                {item.icon === "activity" && (
-                  <svg
-                    class="w-5 h-5"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      stroke-width="2"
-                      d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"
-                    />
-                  </svg>
-                )}
-                {item.icon === "chart" && (
-                  <svg
-                    class="w-5 h-5"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      stroke-width="2"
-                      d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z"
-                    />
-                  </svg>
-                )}
-                {item.icon === "stats" && (
-                  <svg
-                    class="w-5 h-5"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      stroke-width="2"
-                      d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"
-                    />
-                  </svg>
-                )}
-                <span>{item.name}</span>
+                <div
+                  class={`transition-transform duration-300 ${isActive ? "scale-110" : "group-hover:scale-110"}`}
+                >
+                  {/* ICONOS */}
+                  {item.icon === "dashboard" && (
+                    <svg
+                      class="w-5 h-5"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="2"
+                        d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"
+                      />
+                    </svg>
+                  )}
+                  {item.icon === "accounts" && (
+                    <svg
+                      class="w-5 h-5"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="2"
+                        d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"
+                      />
+                    </svg>
+                  )}
+                  {item.icon === "contribute" && (
+                    <svg
+                      class="w-5 h-5"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="2"
+                        d="M12 6v6m0 0v6m0-6h6m-6 0H6"
+                      />
+                    </svg>
+                  )}
+                  {item.icon === "withdraw" && (
+                    <svg
+                      class="w-5 h-5"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="2"
+                        d="M20 12H4"
+                      />
+                    </svg>
+                  )}
+                  {item.icon === "transfer" && (
+                    <svg
+                      class="w-5 h-5"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="2"
+                        d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"
+                      />
+                    </svg>
+                  )}
+                  {item.icon === "activity" && (
+                    <svg
+                      class="w-5 h-5"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="2"
+                        d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"
+                      />
+                    </svg>
+                  )}
+                  {item.icon === "goals" && (
+                    <svg
+                      class="w-5 h-5"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="2"
+                        d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z"
+                      />
+                    </svg>
+                  )}
+                  {item.icon === "alerts" && (
+                    <svg
+                      class="w-5 h-5"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="2"
+                        d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"
+                      />
+                    </svg>
+                  )}
+                  {item.icon === "settings" && (
+                    <svg
+                      class="w-5 h-5"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="2"
+                        d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
+                      />
+                      <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="2"
+                        d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
+                      />
+                    </svg>
+                  )}
+                </div>
+                <span class="font-medium tracking-wide text-sm">
+                  {item.name}
+                </span>
               </a>
             </li>
-          ))
-        }
-      </ul>
-    </nav>
+          );
+        })
+      }
+    </ul>
+  </nav>
 
-    <!-- User Section -->
-    <div class="p-4 border-t border-stone-800">
-      <a
-        href="/auth/logout"
-        class="flex items-center gap-3 px-4 py-3 text-stone-400 hover:bg-stone-800 hover:text-stone-200 rounded-xl transition-colors"
+  <!-- User Section Minimal -->
+  <div class="p-6 border-t border-stone-100">
+    <a
+      href="/auth/logout"
+      class="group flex items-center gap-3 px-4 py-3 text-stone-400 hover:text-red-500 rounded-xl transition-all hover:bg-red-50"
+    >
+      <svg
+        class="w-5 h-5 transition-transform group-hover:-translate-x-1"
+        fill="none"
+        stroke="currentColor"
+        viewBox="0 0 24 24"
+        ><path
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          stroke-width="2"
+          d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"
+        ></path></svg
       >
-        <svg
-          class="w-5 h-5"
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
-        >
-          <path
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            stroke-width="2"
-            d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"
-          ></path>
-        </svg>
-        <span>Cerrar Sesión</span>
-      </a>
-    </div>
+      <span class="font-medium text-sm">Cerrar Sesión</span>
+    </a>
   </div>
-</section>
+</aside>
 
+<!-- No script needed for Client Router logic, but kept for mobile menu toggle -->
 <script>
-  // Elementos del DOM
   const sidebar = document.getElementById("sidebar");
   const overlay = document.getElementById("sidebar-overlay");
   const menuButton = document.getElementById("mobile-menu-button");
-  const closeButton = document.getElementById("sidebar-close-button");
+  const closeButton = document.getElementById("sidebar-close-button"); // Removed from HTML but good safety
   const menuOpenIcon = document.getElementById("menu-open-icon");
   const menuCloseIcon = document.getElementById("menu-close-icon");
 
-  // Función para abrir el sidebar
   function openSidebar() {
+    // Mobile logic: transform class needs to be handled differently if we changed the sidebar structure
+    // Since we removed the specialized mobile styling in CSS for the sake of Zen upgrade,
+    // we need to ensure the mobile classes are applied correctly.
+    // Assuming the sidebar has a wrapper or we toggle classes on it.
+
+    // For simplicity in this Zen update:
+    sidebar?.classList.add("translate-x-0");
     sidebar?.classList.remove("-translate-x-full");
+
+    // Mobile positioning classes (override desktop defaults if needed)
+    sidebar?.classList.add(
+      "fixed",
+      "z-50",
+      "inset-y-0",
+      "left-0",
+      "w-72",
+      "shadow-2xl",
+    );
+
     overlay?.classList.remove("hidden");
     menuOpenIcon?.classList.add("hidden");
-    menuButton?.classList.add("hidden");
-    document.body.style.overflow = "hidden"; // Prevenir scroll del body
+    menuCloseIcon?.classList.remove("hidden");
+    document.body.style.overflow = "hidden";
   }
 
-  // Función para cerrar el sidebar
   function closeSidebar() {
+    sidebar?.classList.remove("translate-x-0");
     sidebar?.classList.add("-translate-x-full");
+
+    // Clean up mobile specific classes so desktop layout isn't affected if resized
+    // sidebar?.classList.remove("fixed", "z-50", "inset-y-0", "left-0", "w-72", "shadow-2xl");
+    // Actually, on desktop strict mode, these classes might be fine if hidden, but let's be safe.
+
     overlay?.classList.add("hidden");
     menuOpenIcon?.classList.remove("hidden");
-    menuButton?.classList.remove("hidden");
     menuCloseIcon?.classList.add("hidden");
-    document.body.style.overflow = ""; // Restaurar scroll
+    document.body.style.overflow = "";
   }
 
-  // Toggle del sidebar
   menuButton?.addEventListener("click", () => {
-    if (sidebar?.classList.contains("-translate-x-full")) {
-      openSidebar();
+    if (menuOpenIcon?.classList.contains("hidden")) {
+      closeSidebar();
     } else {
-      closeSidebar();
+      openSidebar();
     }
   });
 
-  // Cerrar con el botón X
-  closeButton?.addEventListener("click", closeSidebar);
-
-  // Cerrar al hacer click en el overlay
   overlay?.addEventListener("click", closeSidebar);
-
-  // Cerrar al hacer click en un link (solo en móvil)
-  const sidebarLinks = sidebar?.querySelectorAll("a");
-  sidebarLinks?.forEach((link) => {
-    link.addEventListener("click", () => {
-      if (window.innerWidth < 768) {
-        closeSidebar();
-      }
-    });
-  });
-
-  // Cerrar al presionar Escape
-  document.addEventListener("keydown", (e) => {
-    if (
-      e.key === "Escape" &&
-      !sidebar?.classList.contains("-translate-x-full")
-    ) {
-      closeSidebar();
-    }
-  });
-
-  // Ajustar al cambiar el tamaño de la ventana
-  window.addEventListener("resize", () => {
-    if (window.innerWidth >= 768) {
-      closeSidebar();
-    }
-  });
 </script>
 
 <style>
-  /* Prevenir scroll horizontal */
-  body {
-    overflow-x: hidden;
-  }
-
-  /* Asegurar que el overlay esté detrás del sidebar */
-  #sidebar-overlay {
-    z-index: 30;
-  }
-
-  #sidebar {
-    z-index: 40;
-  }
-
-  #mobile-menu-button {
-    z-index: 50;
+  /* Sidebar Mobile Default State: Hidden off-canvas */
+  @media (max-width: 1024px) {
+    #sidebar {
+      position: fixed;
+      top: 0;
+      left: 0;
+      height: 100vh;
+      z-index: 50;
+      width: 18rem; /* w-72 */
+      transform: translateX(-100%);
+      transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      box-shadow: 0 25px 50px -12px rgb(0 0 0 / 0.25);
+    }
+    #sidebar.translate-x-0 {
+      transform: translateX(0);
+    }
   }
 </style>
