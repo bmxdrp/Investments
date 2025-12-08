@@ -7,7 +7,7 @@ const UNPROTECTED_ROUTES = ["/api/auth/login", "/api/auth/register", "/api/cron"
 
 // Cache de sesiones para reducir consultas a DB
 const sessionCache = new Map<string, { userId: string; userRole: string | null; expiresAt: Date }>();
-const CACHE_TTL = 30 * 60 * 1000; // 30 minutos
+const CACHE_TTL = 120 * 60 * 1000; // 2 horas
 const cacheTimestamps = new Map<string, number>();
 
 function extractSessionId(cookieHeader: string): string | null {

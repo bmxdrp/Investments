@@ -67,29 +67,43 @@ if (!self.define) {
     });
   };
 }
-define(['./workbox-862e79f7'], (function (workbox) { 'use strict';
+define(['./workbox-f9cef57a'], (function (workbox) { 'use strict';
 
-	self.skipWaiting();
-	workbox.clientsClaim();
-	workbox.registerRoute(({
-	  request
-	}) => request.mode === 'navigate', new workbox.NetworkFirst({
-	  "cacheName": "pages-cache",
-	  "networkTimeoutSeconds": 3,
-	  plugins: [new workbox.ExpirationPlugin({
-	    maxEntries: 50,
-	    maxAgeSeconds: 86400
-	  })]
-	}), 'GET');
-	workbox.registerRoute(({
-	  url
-	}) => url.pathname.startsWith('/api/'), new workbox.NetworkFirst({
-	  "cacheName": "api-cache",
-	  "networkTimeoutSeconds": 3,
-	  plugins: [new workbox.ExpirationPlugin({
-	    maxEntries: 100,
-	    maxAgeSeconds: 3600
-	  })]
-	}), 'GET');
+  self.skipWaiting();
+  workbox.clientsClaim();
+
+  /**
+   * The precacheAndRoute() method efficiently caches and responds to
+   * requests for URLs in the manifest.
+   * See https://goo.gl/S9QRab
+   */
+  workbox.precacheAndRoute([{
+    "url": "/offline",
+    "revision": "0.u2etorhfaik"
+  }], {});
+  workbox.cleanupOutdatedCaches();
+  workbox.registerRoute(new workbox.NavigationRoute(workbox.createHandlerBoundToURL("/offline"), {
+    allowlist: [/^\/$/]
+  }));
+  workbox.registerRoute(({
+    request
+  }) => request.mode === 'navigate', new workbox.NetworkFirst({
+    "cacheName": "pages-cache",
+    "networkTimeoutSeconds": 3,
+    plugins: [new workbox.ExpirationPlugin({
+      maxEntries: 50,
+      maxAgeSeconds: 86400
+    })]
+  }), 'GET');
+  workbox.registerRoute(({
+    url
+  }) => url.pathname.startsWith('/api/'), new workbox.NetworkFirst({
+    "cacheName": "api-cache",
+    "networkTimeoutSeconds": 3,
+    plugins: [new workbox.ExpirationPlugin({
+      maxEntries: 100,
+      maxAgeSeconds: 3600
+    })]
+  }), 'GET');
 
 }));

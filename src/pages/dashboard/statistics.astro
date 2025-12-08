@@ -1,5 +1,6 @@
 ---
 import Layout from "@layouts/default.astro";
+import FinanceChart from "@components/FinanceChart.astro";
 import { sql, setRLSUser } from "@lib/db";
 
 const userId = Astro.locals.userId;
@@ -33,14 +34,34 @@ const allAccounts = await sql`
 `;
 
 // Función para calcular métricas avanzadas
-const calculateMetrics = (values: number[]) => {
-  if (values.length < 2)
+// Función para calcular métricas avanzadas (Time-Weighted Return aproximado)
+const calculateMetrics = (data: { value: number; flow: number }[]) => {
+  if (data.length < 2)
     return { volatility: 0, sharpe: 0, maxDrawdown: 0, avgReturn: 0 };
 
   const returns = [];
-  for (let i = 1; i < values.length; i++) {
-    if (values[i - 1] > 0) {
-      returns.push((values[i] - values[i - 1]) / values[i - 1]);
+  for (let i = 1; i < data.length; i++) {
+    const prevValue = data[i - 1].value;
+    const currValue = data[i].value;
+    const flow = data[i].flow; // Flujo ocurrido DURANTE el día i
+
+    // Denominador ajustado: Valor inicial + Flujos significativos.
+    // Asumimos flujos a principio de día para simplificar TWR o usamos la fórmula Modificada de Dietz para un día.
+    // Fórmula simple: (V_final - V_inicial - FlujoOcurrido) / (V_inicial + FlujoOcurrido)
+    // Pero si flujo es retiro (-), denominador disminuye.
+    // Usaremos: (V_final - (V_inicial + Flujo)) / (V_inicial + Flujo)
+
+    // Si es el primer depósito (V_inicial = 0), retorno es 0 (no infinito).
+    const denominator = prevValue + flow;
+
+    if (denominator > 0) {
+      const gain = currValue - denominator;
+      const dailyReturn = gain / denominator;
+
+      // Filtro de seguridad para datos sucios (retornos > 50% diarios son sospechosos salvo crypto extremo)
+      if (Math.abs(dailyReturn) < 0.5) {
+        returns.push(dailyReturn);
+      }
     }
   }
 
@@ -61,12 +82,19 @@ const calculateMetrics = (values: number[]) => {
     volatility > 0 ? (avgExcessReturn * 252) / (volatility / 100) : 0;
 
   let maxDrawdown = 0;
-  let peak = values[0];
-  for (const value of values) {
-    if (value > peak) peak = value;
-    const drawdown = ((value - peak) / peak) * 100;
+  let peak = -Infinity;
+
+  // Drawdown calculado sobre la curva de retorno acumulado, no sobre saldos brutos (afectados por retiros)
+  let cumulative = 100;
+  for (const r of returns) {
+    cumulative = cumulative * (1 + r);
+    if (cumulative > peak) peak = cumulative;
+    const drawdown = ((cumulative - peak) / peak) * 100;
     if (drawdown < maxDrawdown) maxDrawdown = drawdown;
   }
+
+  // Si no hubo returns suficientes, peak se queda en default
+  if (peak === -Infinity) maxDrawdown = 0;
 
   return { volatility, sharpe, maxDrawdown, avgReturn: avgReturn * 252 * 100 };
 };
@@ -167,10 +195,10 @@ const portfolioWithdraws = parseFloat(portfolioWithdrawsRes[0]?.total || 0);
 const portfolioNetFlow = portfolioContribs - portfolioWithdraws;
 
 const portfolioGain = totalPortfolio - portfolioStartBalance - portfolioNetFlow;
-const portfolioAverageCapital = portfolioStartBalance + portfolioNetFlow / 2;
+const portfolioCapitalInvested = portfolioStartBalance + portfolioNetFlow;
 const portfolioROI =
-  portfolioAverageCapital > 0
-    ? (portfolioGain / portfolioAverageCapital) * 100
+  portfolioCapitalInvested > 0
+    ? (portfolioGain / portfolioCapitalInvested) * 100
     : 0;
 
 // ============================================
@@ -187,17 +215,33 @@ const accountsWithStats = await Promise.all(
       // 1. OBTENER HISTORIAL DE LA CUENTA PADRE
       // ========================================
       const history = await sql`
-        SELECT new_value, date 
-        FROM transactions 
+        SELECT 
+            date,
+            (
+                SELECT new_value 
+                FROM transactions trank 
+                WHERE trank.account_id = ${account.id} 
+                  AND trank.date = t.date 
+                ORDER BY trank.id DESC LIMIT 1
+            ) as end_value,
+            SUM(
+                CASE 
+                    WHEN type IN ('contribution', 'initial_balance', 'transfer_in') THEN amount
+                    WHEN type IN ('withdrawal', 'transfer_out') THEN -amount
+                    ELSE 0
+                END
+            ) as flow
+        FROM transactions t
         WHERE account_id = ${account.id}
         AND user_id = ${userId}
-        AND new_value IS NOT NULL
         AND date >= CURRENT_DATE - ${periodDays}::int * INTERVAL '1 day'
+        GROUP BY date
         ORDER BY date ASC
       `;
 
-      const values = history.map((h) => Number(h.new_value));
-      const currentValue = values[values.length - 1] || 0;
+      const parentHistoryValues = history.map((h) => Number(h.end_value || 0));
+      const currentValue =
+        parentHistoryValues[parentHistoryValues.length - 1] || 0;
 
       // Balance inicial de la cuenta padre
       const startBalanceRes = await sql`
@@ -245,15 +289,35 @@ const accountsWithStats = await Promise.all(
       const subsWithStats = await Promise.all(
         subaccounts.map(async (sub) => {
           const subHistory = await sql`
-            SELECT new_value, date FROM transactions 
+            SELECT 
+                date,
+                (
+                    SELECT new_value 
+                    FROM transactions trank 
+                    WHERE trank.account_id = ${sub.id} 
+                      AND trank.date = t.date 
+                    ORDER BY trank.id DESC LIMIT 1
+                ) as end_value,
+                SUM(
+                    CASE 
+                        WHEN type IN ('contribution', 'initial_balance', 'transfer_in') THEN amount
+                        WHEN type IN ('withdrawal', 'transfer_out') THEN -amount
+                        ELSE 0
+                    END
+                ) as flow
+            FROM transactions t
             WHERE account_id = ${sub.id}
             AND user_id = ${userId}
-            AND new_value IS NOT NULL
             AND date >= CURRENT_DATE - ${periodDays}::int * INTERVAL '1 day'
+            GROUP BY date
             ORDER BY date ASC
           `;
-          const subValues = subHistory.map((h) => Number(h.new_value));
-          const subCurrent = subValues[subValues.length - 1] || 0;
+          const subValues = subHistory.map((h) => ({
+            value: Number(h.end_value || 0),
+            flow: Number(h.flow || 0),
+            date: h.date,
+          }));
+          const subCurrent = subValues[subValues.length - 1]?.value || 0;
 
           const subStartBalanceRes = await sql`
             SELECT new_value FROM transactions 
@@ -268,7 +332,8 @@ const accountsWithStats = await Promise.all(
               ? Number(subStartBalanceRes[0].new_value)
               : 0;
 
-          const [subContribsRes, subWithdrawsRes] = await Promise.all([
+          // Para subcuentas, necesitamos distinguir flujos externos vs internos
+          const [subContribsRes, subWithdrawsRes, subTransfersInRes, subTransfersOutRes] = await Promise.all([
             sql`
               SELECT SUM(amount) as total 
               FROM transactions 
@@ -282,19 +347,41 @@ const accountsWithStats = await Promise.all(
               FROM transactions 
               WHERE account_id = ${sub.id} 
               AND user_id = ${userId} 
-              AND type = 'withdrawal' 
+              AND type = 'withdrawal'
+              AND date >= CURRENT_DATE - ${periodDays}::int * INTERVAL '1 day'
+            `,
+            sql`
+              SELECT SUM(amount) as total 
+              FROM transactions 
+              WHERE account_id = ${sub.id} 
+              AND user_id = ${userId} 
+              AND type = 'transfer_in'
+              AND date >= CURRENT_DATE - ${periodDays}::int * INTERVAL '1 day'
+            `,
+            sql`
+              SELECT SUM(amount) as total 
+              FROM transactions 
+              WHERE account_id = ${sub.id} 
+              AND user_id = ${userId} 
+              AND type = 'transfer_out'
               AND date >= CURRENT_DATE - ${periodDays}::int * INTERVAL '1 day'
             `,
           ]);
 
           const subContribs = parseFloat(subContribsRes[0]?.total || 0);
           const subWithdraws = parseFloat(subWithdrawsRes[0]?.total || 0);
-          const subNetFlow = subContribs - subWithdraws;
+          const subTransfersIn = parseFloat(subTransfersInRes[0]?.total || 0);
+          const subTransfersOut = parseFloat(subTransfersOutRes[0]?.total || 0);
+          
+          // Para el ROI de la subcuenta, contamos TODOS los flujos (incluyendo transfers)
+          const subNetFlowTotal = subContribs - subWithdraws + subTransfersIn - subTransfersOut;
+          
+          // Para el ROI consolidado del padre, solo contamos flujos externos
+          const subNetFlowExternal = subContribs - subWithdraws;
 
-          const subGain = subCurrent - subStartBalance - subNetFlow;
-          const subAvgCapital = subStartBalance + subNetFlow / 2;
-          const subROI =
-            subAvgCapital > 0 ? (subGain / subAvgCapital) * 100 : 0;
+          const subGain = subCurrent - subStartBalance - subNetFlowTotal;
+          const subAvgCapital = subStartBalance + subNetFlowTotal / 2;
+          const subROI = subAvgCapital > 0 ? (subGain / subAvgCapital) * 100 : 0;
 
           const subMetrics = calculateMetrics(subValues);
 
@@ -310,10 +397,10 @@ const accountsWithStats = await Promise.all(
             sharpe: subMetrics.sharpe,
             subGain,
             subAvgCapital,
-            subNetFlow,
+            subNetFlow: subNetFlowTotal, // Flujo total para cálculos internos
+            subNetFlowExternal, // Flujo externo para ROI consolidado
             startBalance: subStartBalance,
-            historyValues: subValues, // Guardar para consolidar
-            historyDates: subHistory.map((h) => h.date),
+            historyData: subValues,
           };
         }),
       );
@@ -341,48 +428,80 @@ const accountsWithStats = await Promise.all(
       }
 
       // Para cada fecha, obtener el valor del padre + subcuentas
-      const consolidatedValues = allDates.map((dateStr) => {
-        // Valor del padre: buscar la última transacción antes o igual a esta fecha
-        let parentValue = 0;
-        for (let i = history.length - 1; i >= 0; i--) {
-          const txDate = new Date(history[i].date).toISOString().split("T")[0];
-          if (txDate <= dateStr) {
-            parentValue = Number(history[i].new_value);
-            break;
-          }
-        }
+      const consolidatedData = allDates.map((dateStr) => {
+        // PADRE: Buscar exacto o último
+        let parentVal = 0;
+        let parentFlow = 0;
 
-        // Valor de subcuentas: última transacción antes o igual a esta fecha
-        const subsValue = subsWithStats.reduce((sum, sub) => {
-          if (sub.historyValues.length === 0) return sum;
+        // Buscamos si existe dato para esta fecha exacta en el historial agrupado
+        const dayRecord = history.find(
+          (h) => new Date(h.date).toISOString().split("T")[0] === dateStr,
+        );
 
-          let subValue = 0;
-          for (let i = sub.historyValues.length - 1; i >= 0; i--) {
-            const txDate = new Date(sub.historyDates[i])
-              .toISOString()
-              .split("T")[0];
-            if (txDate <= dateStr) {
-              subValue = sub.historyValues[i];
+        if (dayRecord) {
+          parentVal = Number(dayRecord.end_value) || 0;
+          parentFlow = Number(dayRecord.flow) || 0;
+        } else {
+          // Si no hay registro hoy, el valor es el último conocido, y flujo es 0
+          // Buscamos el último registro anterior
+          for (let i = history.length - 1; i >= 0; i--) {
+            if (
+              new Date(history[i].date).toISOString().split("T")[0] < dateStr
+            ) {
+              parentVal = Number(history[i].end_value) || 0;
               break;
             }
           }
-          return sum + subValue;
-        }, 0);
+        }
 
-        return parentValue + subsValue;
+        // SUBCUENTAS
+        let subsVal = 0;
+        let subsFlow = 0;
+
+        subsWithStats.forEach((sub) => {
+          const subRecord = sub.historyData.find(
+            (h) => new Date(h.date).toISOString().split("T")[0] === dateStr,
+          );
+          if (subRecord) {
+            subsVal += subRecord.value || 0;
+            subsFlow += subRecord.flow || 0;
+          } else {
+            // Último valor conocido
+            let lastKnown = 0;
+            for (let i = sub.historyData.length - 1; i >= 0; i--) {
+              if (
+                new Date(sub.historyData[i].date).toISOString().split("T")[0] <
+                dateStr
+              ) {
+                lastKnown = sub.historyData[i].value || 0;
+                break;
+              }
+            }
+            subsVal += lastKnown;
+          }
+        });
+
+        return {
+          value: parentVal + subsVal,
+          flow: parentFlow + subsFlow, // Flujo neto consolidado del día
+        };
       });
 
       // Filtrar valores cero al inicio (antes de cualquier transacción)
-      const firstNonZeroIndex = consolidatedValues.findIndex((v) => v > 0);
-      const filteredValues =
+      // Filtrar valores cero al inicio
+      const firstNonZeroIndex = consolidatedData.findIndex((d) => d.value > 0);
+      const filteredData =
         firstNonZeroIndex >= 0
-          ? consolidatedValues.slice(firstNonZeroIndex)
-          : consolidatedValues;
+          ? consolidatedData.slice(firstNonZeroIndex)
+          : consolidatedData;
+
+      // Extract values only for projection
+      const filteredValuesStub = filteredData.map((d) => d.value);
 
       // ========================================
       // 4. CALCULAR MÉTRICAS CONSOLIDADAS
       // ========================================
-      const metrics = calculateMetrics(filteredValues);
+      const metrics = calculateMetrics(filteredData);
 
       const totalCurrentValue =
         currentValue +
@@ -391,31 +510,59 @@ const accountsWithStats = await Promise.all(
         startBalance +
         subsWithStats.reduce((sum, s) => sum + s.startBalance, 0);
       const totalSubNetFlowExt = subsWithStats.reduce(
-        (sum, s) => sum + (s.subNetFlow || 0),
+        (sum, s) => sum + (s.subNetFlowExternal || 0),
         0,
       );
 
       const totalGain =
         totalCurrentValue - totalStartBalance - netFlowExt - totalSubNetFlowExt;
-      const totalAvgCapital =
-        totalStartBalance + (netFlowExt + totalSubNetFlowExt) / 2;
+      
+      // Para cuentas con múltiples flujos distribuidos en el tiempo,
+      // usar capital total invertido es más preciso que capital promedio
+      const totalCapitalInvested = totalStartBalance + netFlowExt + totalSubNetFlowExt;
       const consolidatedROI =
-        totalAvgCapital > 0 ? (totalGain / totalAvgCapital) * 100 : 0;
+        totalCapitalInvested > 0 ? (totalGain / totalCapitalInvested) * 100 : 0;
 
-      // Proyecciones basadas en valores consolidados DIARIOS
-      const projection3m = calculateProjection(filteredValues, 90);
-      const projection6m = calculateProjection(filteredValues, 180);
-      const projection12m = calculateProjection(filteredValues, 365);
+      // Proyecciones basadas en tendencia lineal + validación de sensatez
+      // Para historiales cortos (<30 días), usamos proyección lineal conservadora
+      // Para historiales largos, usamos una combinación de lineal y compuesto moderado
+      
+      let projection3m, projection6m, projection12m;
+      
+      if (filteredData.length < 30 || Math.abs(consolidatedROI) < 1) {
+        // Proyección lineal simple basada en el ROI ya calculado
+        const daysInPeriod = periodDays;
+        const dailyROI = consolidatedROI / daysInPeriod;
+        const dailyGain = (dailyROI / 100) * totalCapitalInvested;
+        
+        projection3m = Math.max(0, totalCurrentValue + (dailyGain * 90));
+        projection6m = Math.max(0, totalCurrentValue + (dailyGain * 180));
+        projection12m = Math.max(0, totalCurrentValue + (dailyGain * 365));
+      } else {
+        // Proyección con interés compuesto moderado (limitado al 50% anual máximo)
+        const annualRate = Math.min(Math.max(metrics.avgReturn / 100, -0.5), 0.5);
+        const dailyRate = annualRate / 365;
+        
+        projection3m = totalCurrentValue * Math.pow(1 + dailyRate, 90);
+        projection6m = totalCurrentValue * Math.pow(1 + dailyRate, 180);
+        projection12m = totalCurrentValue * Math.pow(1 + dailyRate, 365);
+        
+        // Validación: ninguna proyección debe ser más del 100% del valor actual
+        const maxGrowth = totalCurrentValue * 2;
+        projection3m = Math.min(projection3m, maxGrowth);
+        projection6m = Math.min(projection6m, maxGrowth * 1.5);
+        projection12m = Math.min(projection12m, maxGrowth * 2);
+      }
 
       const beta = 0.8 + Math.random() * 0.8;
 
       let wins = 0;
-      for (let i = 1; i < filteredValues.length; i++) {
-        if (filteredValues[i] > filteredValues[i - 1]) wins++;
+      for (let i = 1; i < filteredValuesStub.length; i++) {
+        if (filteredValuesStub[i] > filteredValuesStub[i - 1]) wins++;
       }
       const winRate =
-        filteredValues.length > 1
-          ? (wins / (filteredValues.length - 1)) * 100
+        filteredValuesStub.length > 1
+          ? (wins / (filteredValuesStub.length - 1)) * 100
           : 0;
 
       let riskLevel = "bajo";
@@ -436,7 +583,7 @@ const accountsWithStats = await Promise.all(
         subsWithStats.reduce((sum, s) => sum + s.currentValueCOP, 0);
 
       const gainCOP = toCOP(totalGain, account.currency);
-      const averageCapitalCOP = toCOP(totalAvgCapital, account.currency);
+      const capitalInvestedCOP = toCOP(totalCapitalInvested, account.currency);
 
       return {
         ...account,
@@ -458,9 +605,9 @@ const accountsWithStats = await Promise.all(
         projection12m,
         trend,
         subaccounts: subsWithStats,
-        historyLength: filteredValues.length, // Ahora mostrará ~19 días en vez de 3
+        historyLength: filteredData.length,
         gainCOP,
-        averageCapitalCOP,
+        capitalInvestedCOP,
         allocation: 0,
       };
     }),
@@ -535,56 +682,24 @@ const chartValues = portfolioHistory.map((r) => Number(r.total_value_cop));
 const isUptrend =
   chartValues.length > 1 &&
   chartValues[chartValues.length - 1] >= chartValues[0];
-const chartColor = isUptrend ? "34,197,94" : "239,68,68";
+const chartColor = isUptrend ? "34,197,94" : "239,68,68"; // rgb values
 
-const quickChartConfig = {
-  type: "line",
-  data: {
-    labels: chartLabels,
-    datasets: [
-      {
-        label: "Valor Total del Portafolio (COP)",
-        data: chartValues,
-        borderColor: `rgb(${chartColor})`,
-        backgroundColor: `rgba(${chartColor},0.15)`,
-        fill: true,
-        pointRadius: 3,
-        borderWidth: 1,
-        pointStyle: "circle",
-      },
-    ],
-  },
-  options: {
-    responsive: true,
-    plugins: {
-      legend: { display: false },
-      tooltip: {
-        callbacks: {
-          label: (ctx: any) =>
-            new Intl.NumberFormat("es-CO", {
-              style: "currency",
-              currency: "COP",
-            }).format(ctx.raw),
-        },
-      },
+const mainChartData = {
+  labels: chartLabels,
+  datasets: [
+    {
+      label: "Valor Total (COP)",
+      data: chartValues,
+      borderColor: `rgb(${chartColor})`,
+      backgroundColor: `rgba(${chartColor}, 0.1)`,
+      fill: true,
+      tension: 0.4,
+      pointRadius: 0,
+      pointHoverRadius: 6,
+      borderWidth: 2,
     },
-    scales: {
-      x: { ticks: { maxTicksLimit: 10 }, grid: { display: false } },
-      y: {
-        grid: { color: "rgba(0,0,0,0.05)" },
-        ticks: {
-          callback: (value: any) =>
-            new Intl.NumberFormat("es-CO", {
-              style: "currency",
-              currency: "COP",
-            }).format(value),
-        },
-      },
-    },
-  },
+  ],
 };
-
-const quickChartUrl = `https://quickchart.io/chart?c=${encodeURIComponent(JSON.stringify(quickChartConfig))}&width=1200&height=300&backgroundColor=transparent`;
 
 // Gráfico donut
 const compositionLabels = accountsWithStats.map((a) => a.name);
@@ -593,107 +708,27 @@ const compositionValues = accountsWithStats.map((a) =>
 );
 
 const compositionColors = [
-  "54, 162, 235",
-  "255, 99, 132",
-  "255, 205, 86",
-  "75, 192, 192",
-  "153, 102, 255",
-  "255, 159, 64",
-  "201, 203, 207",
-  "34, 197, 94",
+  "#3b82f6",
+  "#10b981",
+  "#f59e0b",
+  "#ef4444",
+  "#8b5cf6",
+  "#ec4899",
+  "#6366f1",
+  "#64748b",
 ];
-const donutColors = compositionLabels.map(
-  (_, i) => `rgb(${compositionColors[i % compositionColors.length]})`,
-);
 
-const quickChartDonutConfig = {
-  type: "doughnut",
-  data: {
-    labels: compositionLabels,
-    datasets: [
-      {
-        data: compositionValues,
-        backgroundColor: donutColors,
-        borderWidth: 2,
-      },
-    ],
-  },
-  options: {
-    cutout: "65%",
-    plugins: {
-      legend: {
-        position: "right",
-        labels: { boxWidth: 14, padding: 12, font: { size: 11 } },
-      },
-      tooltip: {
-        callbacks: {
-          label: (ctx: any) => {
-            const value = ctx.raw;
-            const total = compositionValues.reduce((a, b) => a + b, 0);
-            const pct = total > 0 ? ((value / total) * 100).toFixed(1) : 0;
-            return `${ctx.label}: ${new Intl.NumberFormat("es-CO", { style: "currency", currency: "COP" }).format(value)} (${pct}%)`;
-          },
-        },
-      },
+const donutChartData = {
+  labels: compositionLabels,
+  datasets: [
+    {
+      data: compositionValues,
+      backgroundColor: compositionColors,
+      borderWidth: 0,
+      hoverOffset: 4,
     },
-  },
+  ],
 };
-
-const quickChartDonutUrl = `https://quickchart.io/chart?c=${encodeURIComponent(JSON.stringify(quickChartDonutConfig))}&width=700&height=400&backgroundColor=transparent`;
-
-// Gráfico de rendimiento
-const performanceValues = portfolioHistory.map((r) =>
-  Number(r.total_value_cop),
-);
-const performanceLabels = portfolioHistory.map((r) =>
-  new Date(r.date).toLocaleDateString("es-CO"),
-);
-
-const performanceReturns = [];
-if (performanceValues.length > 0) {
-  const base = performanceValues[0];
-  for (const v of performanceValues) {
-    const rtn = base > 0 ? ((v - base) / base) * 100 : 0;
-    performanceReturns.push(Number(rtn.toFixed(2)));
-  }
-}
-
-const finalReturn = performanceReturns.at(-1) || 0;
-const perfColor = finalReturn >= 0 ? "34,197,94" : "239,68,68";
-
-const quickChartPerformanceConfig = {
-  type: "line",
-  data: {
-    labels: performanceLabels,
-    datasets: [
-      {
-        label: "Rendimiento del Portafolio (%)",
-        data: performanceReturns,
-        borderColor: `rgb(${perfColor})`,
-        backgroundColor: `rgba(${perfColor},0.12)`,
-        fill: true,
-        tension: 0.35,
-        borderWidth: 3,
-        pointRadius: 0,
-      },
-    ],
-  },
-  options: {
-    plugins: {
-      legend: { display: false },
-      tooltip: { callbacks: { label: (ctx: any) => `${ctx.raw.toFixed(2)}%` } },
-    },
-    scales: {
-      x: { grid: { display: false }, ticks: { maxTicksLimit: 10 } },
-      y: {
-        ticks: { callback: (value: any) => `${value}%` },
-        grid: { color: "rgba(0,0,0,0.05)" },
-      },
-    },
-  },
-};
-
-const quickChartPerformanceUrl = `https://quickchart.io/chart?c=${encodeURIComponent(JSON.stringify(quickChartPerformanceConfig))}&width=1200&height=320&backgroundColor=transparent`;
 
 const periodOptions = [
   { value: "7", label: "7 días" },
@@ -752,7 +787,7 @@ if (losingAccounts.length > 0) {
 }
 ---
 
-<Layout title="Dashboard de Inversiones" activePage="statistics">
+<Layout title="Horizonte de Inversiones" activePage="statistics">
   <div class="max-w-7xl mx-auto space-y-6">
     <!-- Header -->
     <div
@@ -760,7 +795,7 @@ if (losingAccounts.length > 0) {
     >
       <div>
         <h1 class="text-4xl font-bold text-slate-900 mb-2">
-          Dashboard de Inversiones
+          Horizonte de Inversiones
         </h1>
         <p class="text-slate-600">
           Análisis avanzado y proyecciones de portafolio
@@ -800,44 +835,20 @@ if (losingAccounts.length > 0) {
           {portfolioROI >= 0 ? "Tendencia positiva" : "Tendencia negativa"}
         </div>
       </div>
-      <div class="w-full overflow-x-auto">
-        <img
-          src={quickChartUrl}
-          alt="Historial del valor del portafolio"
-          class="w-full rounded-lg border border-slate-100"
-          loading="lazy"
+      <div class="w-full">
+        <FinanceChart
+          id="main-portfolio-chart"
+          type="line"
+          data={mainChartData}
+          height="350px"
+          options={{
+            scales: {
+              x: { grid: { display: false } },
+              y: { grid: { color: "#f5f5f4" }, border: { display: false } },
+            },
+            plugins: { legend: { display: false } },
+          }}
         />
-      </div>
-
-      <!-- Gráfico de Rendimiento -->
-      <div
-        class="bg-white rounded-xl shadow-sm border border-slate-200 p-6 mt-6"
-      >
-        <div
-          class="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-4 gap-2"
-        >
-          <div>
-            <h2 class="text-xl font-bold text-slate-900">
-              Rendimiento Acumulado del Portafolio
-            </h2>
-            <p class="text-sm text-slate-500">
-              Variación porcentual real (sin aportes ni retiros)
-            </p>
-          </div>
-          <div
-            class={`px-3 py-1 rounded-full text-xs font-semibold ${finalReturn >= 0 ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}`}
-          >
-            {finalReturn >= 0 ? "+" : ""}{finalReturn.toFixed(2)}%
-          </div>
-        </div>
-        <div class="w-full overflow-x-auto">
-          <img
-            src={quickChartPerformanceUrl}
-            alt="Rendimiento del Portafolio"
-            class="w-full rounded-lg border border-slate-100"
-            loading="lazy"
-          />
-        </div>
       </div>
     </div>
 
@@ -1152,72 +1163,122 @@ if (losingAccounts.length > 0) {
             {accountsWithStats.length} activos
           </span>
         </div>
-        <div class="flex justify-center">
-          <img
-            src={quickChartDonutUrl}
-            alt="Composición del Portafolio"
-            class="max-w-full rounded-lg"
-            loading="lazy"
+        <div class="flex justify-center relative">
+          <FinanceChart
+            id="composition-donut"
+            type="doughnut"
+            data={donutChartData}
+            height="350px"
+            options={{
+              plugins: {
+                legend: {
+                  position: "bottom",
+                  labels: { padding: 20, usePointStyle: true },
+                },
+              },
+              cutout: "65%",
+            }}
           />
         </div>
       </div>
 
       <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
-        <h3 class="text-lg font-bold text-slate-900 mb-6">
-          Distribución del Portafolio
-        </h3>
-        <div class="space-y-4">
-          {
-            accountsWithStats.map((account) => {
-              const maxAllocation = Math.max(
-                ...accountsWithStats.map((a) => a.allocation),
-              );
-              const barWidth = (account.allocation / maxAllocation) * 100;
-              return (
-                <div class="space-y-2">
-                  <div class="flex justify-between items-center">
-                    <div class="flex items-center gap-2">
-                      <span class="font-semibold text-slate-900">
-                        {account.name}
-                      </span>
-                      <span
-                        class={`px-2 py-0.5 rounded text-xs font-medium ${
-                          account.riskLevel === "bajo"
-                            ? "bg-green-100 text-green-700"
-                            : account.riskLevel === "medio"
-                              ? "bg-yellow-100 text-yellow-700"
-                              : account.riskLevel === "alto"
-                                ? "bg-orange-100 text-orange-700"
-                                : "bg-red-100 text-red-700"
-                        }`}
-                      >
-                        {account.riskLevel}
-                      </span>
-                    </div>
-                    <span class="text-lg font-bold text-slate-900">
-                      {account.allocation.toFixed(1)}%
-                    </span>
-                  </div>
-                  <div class="w-full bg-slate-100 rounded-full h-3 overflow-hidden">
-                    <div
-                      class={`h-3 rounded-full transition-all duration-500 ${
-                        account.riskLevel === "bajo"
-                          ? "bg-gradient-to-r from-green-500 to-emerald-600"
-                          : account.riskLevel === "medio"
-                            ? "bg-gradient-to-r from-yellow-500 to-amber-600"
-                            : account.riskLevel === "alto"
-                              ? "bg-gradient-to-r from-orange-500 to-red-600"
-                              : "bg-gradient-to-r from-red-500 to-rose-700"
-                      }`}
-                      style={`width: ${barWidth}%`}
-                    />
-                  </div>
-                </div>
-              );
-            })
-          }
-        </div>
-      </div>
+  <div class="flex items-center justify-between mb-6">
+    <h3 class="text-lg font-bold text-slate-900">
+      Distribución del Portafolio
+    </h3>
+    <div class="flex gap-2">
+      <select
+        id="sort-portfolio"
+        class="text-xs px-3 py-1.5 border border-slate-300 rounded-lg bg-white text-slate-700 font-medium hover:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors cursor-pointer"
+      >
+        <option value="size">Por tamaño</option>
+        <option value="roi">Por ROI</option>
+        <option value="risk">Por riesgo</option>
+      </select>
+    </div>
+  </div>
+  <div id="portfolio-distribution" class="space-y-4">
+    {
+      accountsWithStats.map((account) => {
+        const trendIcon = account.trend === "up" 
+          ? "↗" 
+          : account.trend === "down" 
+            ? "↘" 
+            : "→";
+        
+        const trendColor = account.trend === "up"
+          ? "text-green-600"
+          : account.trend === "down"
+            ? "text-red-600"
+            : "text-slate-400";
+        
+        const riskColorBg = 
+          account.riskLevel === "bajo"
+            ? "bg-green-100 text-green-700"
+            : account.riskLevel === "medio"
+              ? "bg-yellow-100 text-yellow-700"
+              : account.riskLevel === "alto"
+                ? "bg-orange-100 text-orange-700"
+                : "bg-red-100 text-red-700";
+        
+        const barColor = 
+          account.riskLevel === "bajo"
+            ? "bg-gradient-to-r from-green-500 to-emerald-600"
+            : account.riskLevel === "medio"
+              ? "bg-gradient-to-r from-yellow-500 to-amber-600"
+              : account.riskLevel === "alto"
+                ? "bg-gradient-to-r from-orange-500 to-red-600"
+                : "bg-gradient-to-r from-red-500 to-rose-700";
+        
+        return (
+          <div class="space-y-2" data-allocation={account.allocation} data-roi={account.roi} data-risk={account.volatility}>
+            <div class="flex justify-between items-center">
+              <div class="flex items-center gap-2">
+                <span class={`text-lg font-semibold ${trendColor}`}>
+                  {trendIcon}
+                </span>
+                <span class="font-semibold text-slate-900">
+                  {account.name}
+                </span>
+                <span
+                  class={`px-2 py-0.5 rounded text-xs font-medium ${riskColorBg}`}
+                >
+                  {account.riskLevel}
+                </span>
+              </div>
+              <div class="text-right">
+                <p class="text-lg font-bold text-slate-900">
+                  {account.allocation.toFixed(1)}%
+                </p>
+                <p class="text-xs text-slate-500">
+                  {account.totalCurrentCOP.toLocaleString("es-CO", {
+                    minimumFractionDigits: 0,
+                    maximumFractionDigits: 0,
+                  })} COP
+                </p>
+              </div>
+            </div>
+            <div class="w-full bg-slate-100 rounded-full h-3 overflow-hidden">
+              <div
+                class={`h-3 rounded-full transition-all duration-500 ${barColor}`}
+                style={`width: ${account.allocation}%`}
+              />
+            </div>
+            <div class="flex justify-between text-xs text-slate-500">
+              <span>
+                ROI: <span class={account.roi >= 0 ? "text-green-600 font-medium" : "text-red-600 font-medium"}>
+                  {account.roi >= 0 ? "+" : ""}{account.roi.toFixed(2)}%
+                </span>
+              </span>
+              <span>Vol: {account.volatility.toFixed(1)}%</span>
+            </div>
+          </div>
+        );
+      })
+    }
+  </div>
+</div>
     </div>
 
     <!-- Análisis Detallado -->
@@ -1370,9 +1431,16 @@ if (losingAccounts.length > 0) {
               </div>
 
               <div class="border-t border-slate-200 pt-4 mb-4">
-                <p class="text-sm font-semibold text-slate-700 mb-3">
-                  Proyecciones de Valor
-                </p>
+                <div class="flex items-center justify-between mb-3">
+                  <p class="text-sm font-semibold text-slate-700">
+                    Proyecciones de Valor
+                  </p>
+                  {account.historyLength < 30 && (
+                    <span class="text-xs font-medium text-orange-600 bg-orange-50 px-2 py-1 rounded-full">
+                      ⚠️ Proyección conservadora
+                    </span>
+                  )}
+                </div>
                 <div class="grid grid-cols-3 gap-3">
                   <div class="text-center">
                     <p class="text-xs text-slate-500 mb-1">3 meses</p>
@@ -1602,4 +1670,30 @@ if (losingAccounts.length > 0) {
     url.searchParams.set("period", newPeriod);
     window.location.href = url.toString();
   });
+
+  // Ordenamiento del portfolio
+  const sortSelect = document.getElementById("sort-portfolio");
+  const portfolioContainer = document.getElementById("portfolio-distribution");
+  
+  if (sortSelect && portfolioContainer) {
+    sortSelect.addEventListener("change", (e) => {
+      const sortBy = e.target.value;
+      const items = Array.from(portfolioContainer.children);
+      
+      items.sort((a, b) => {
+        if (sortBy === "size") {
+          return parseFloat(b.dataset.allocation) - parseFloat(a.dataset.allocation);
+        } else if (sortBy === "roi") {
+          return parseFloat(b.dataset.roi) - parseFloat(a.dataset.roi);
+        } else if (sortBy === "risk") {
+          return parseFloat(b.dataset.risk) - parseFloat(a.dataset.risk);
+        }
+        return 0;
+      });
+      
+      // Limpiar y re-agregar en nuevo orden
+      portfolioContainer.innerHTML = "";
+      items.forEach(item => portfolioContainer.appendChild(item));
+    });
+  }
 </script>

@@ -6,57 +6,63 @@ interface Props {
 
 const { activePage } = Astro.props;
 
-const menuItems = [
-  {
-    name: "Dashboard",
-    href: "/dashboard",
-    icon: "dashboard",
-    page: "dashboard",
-  },
-  {
-    name: "Cuentas",
-    href: "/dashboard/accounts",
-    icon: "accounts",
-    page: "accounts",
-  },
-  {
-    name: "Aportes",
-    href: "/dashboard/contribute",
-    icon: "contribute",
-    page: "contribute",
-  },
-  {
-    name: "Retiros",
-    href: "/dashboard/withdraw",
-    icon: "withdraw",
-    page: "withdraw",
-  },
-  {
-    name: "Transferencias",
-    href: "/dashboard/transfer",
-    icon: "transfer",
-    page: "transfer",
-  }, // Enlace agregado para consistencia
-  {
-    name: "Actividad",
-    href: "/dashboard/activity",
-    icon: "activity",
-    page: "activity",
-  },
-  { name: "Metas", href: "/dashboard/goals", icon: "goals", page: "goals" },
-  {
-    name: "Alertas",
-    href: "/dashboard/alerts",
-    icon: "alerts",
-    page: "alerts",
-  },
-  {
-    name: "Ajustes",
-    href: "/dashboard/settings",
-    icon: "settings",
-    page: "settings",
-  },
-];
+// 1. Definir metadatos conocidos (Orden, Iconos, Títulos)
+// Si un archivo existe pero no está aquí, se generará genérico.
+const PAGE_METADATA: Record<
+  string,
+  { name: string; icon: string; order: number }
+> = {
+  index: { name: "Dashboard", icon: "dashboard", order: 1 },
+  accounts: { name: "Cuentas", icon: "accounts", order: 2 },
+  contribute: { name: "Aportes", icon: "contribute", order: 3 },
+  withdraw: { name: "Retiros", icon: "withdraw", order: 4 },
+  transfer: { name: "Transferencias", icon: "transfer", order: 5 },
+  activity: { name: "Actividad", icon: "activity", order: 6 },
+  history: { name: "Historial", icon: "history", order: 7 },
+  goals: { name: "Metas", icon: "goals", order: 8 },
+  alerts: { name: "Alertas", icon: "alerts", order: 9 },
+  settings: { name: "Ajustes", icon: "settings", order: 99 },
+};
+
+// 2. Detectar archivos reales en la carpeta dashboard
+const pageFiles = import.meta.glob("/src/pages/dashboard/*.astro");
+
+// 3. Generar menú dinámico
+const menuItems = Object.keys(pageFiles)
+  .map((path) => {
+    // Extraer nombre de archivo: /src/pages/dashboard/withdraw.astro -> withdraw
+    const fileName = path.split("/").pop()?.replace(".astro", "") || "";
+
+    // Ignorar archivos que no sean páginas
+    if (!fileName) return null;
+
+    const meta = PAGE_METADATA[fileName];
+    const href = fileName === "index" ? "/dashboard" : `/dashboard/${fileName}`;
+    const pageId = fileName === "index" ? "dashboard" : fileName;
+
+    // Si tenemos metadatos, usarlos.
+    if (meta) {
+      return {
+        name: meta.name,
+        href,
+        icon: meta.icon,
+        page: pageId,
+        order: meta.order,
+      };
+    } else {
+      // Página nueva no configurada (Fallback)
+      return {
+        name: fileName.charAt(0).toUpperCase() + fileName.slice(1),
+        href,
+        icon: "document", // Icono genérico
+        page: pageId,
+        order: 100, // Al final
+      };
+    }
+  })
+  .filter((item) => item !== null) // Eliminar nulos
+  // @ts-ignore
+  .sort((a, b) => (a.order || 100) - (b.order || 100)); // Ordenar
 ---
 
 <!-- Mobile Menu Button with Zen Blur -->
@@ -127,7 +133,7 @@ const menuItems = [
   <nav class="flex-1 overflow-y-auto px-4 py-2 custom-scrollbar">
     <ul class="space-y-1.5">
       {
-        menuItems.map((item) => {
+        menuItems.map((item: any) => {
           const isActive = activePage === item.page;
           return (
             <li>
@@ -286,8 +292,25 @@ const menuItems = [
                       />
                     </svg>
                   )}
+                  {item.icon === "document" && (
+                    <svg
+                      class="w-5 h-5"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="2"
+                        d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                      />
+                    </svg>
+                  )}
                 </div>
-                <span class="font-medium tracking-wide text-sm">
+                <span
+                  class={`font-medium tracking-wide transition-colors duration-300 ${isActive ? "text-white" : "group-hover:text-stone-900"}`}
+                >
                   {item.name}
                 </span>
               </a>
@@ -298,105 +321,115 @@ const menuItems = [
     </ul>
   </nav>
 
-  <!-- User Section Minimal -->
-  <div class="p-6 border-t border-stone-100">
-    <a
-      href="/auth/logout"
-      class="group flex items-center gap-3 px-4 py-3 text-stone-400 hover:text-red-500 rounded-xl transition-all hover:bg-red-50"
+  <!-- User Section (Static for now) -->
+  <div class="p-4 border-t border-stone-100">
+    <div
+      class="flex items-center gap-3 p-3 rounded-2xl bg-stone-50 hover:bg-stone-100 transition-colors cursor-pointer group"
     >
-      <svg
-        class="w-5 h-5 transition-transform group-hover:-translate-x-1"
-        fill="none"
-        stroke="currentColor"
-        viewBox="0 0 24 24"
-        ><path
-          stroke-linecap="round"
-          stroke-linejoin="round"
-          stroke-width="2"
-          d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"
-        ></path></svg
+      <div
+        class="w-10 h-10 rounded-full bg-gradient-to-tr from-stone-200 to-stone-300 flex items-center justify-center text-stone-600 font-bold group-hover:scale-105 transition-transform"
       >
-      <span class="font-medium text-sm">Cerrar Sesión</span>
-    </a>
+        JP
+      </div>
+      <div class="flex-1 min-w-0">
+        <p class="text-sm font-bold text-stone-900 truncate">Juan Pérez</p>
+        <p class="text-xs text-stone-500 truncate">Premium Member</p>
+      </div>
+    </div>
   </div>
 </aside>
 
-<!-- No script needed for Client Router logic, but kept for mobile menu toggle -->
 <script>
+  // Mobile Menu Logic with Backdrop Blur
+  const mobileMenuButton = document.getElementById("mobile-menu-button");
+  const sidebarOverlay = document.getElementById("sidebar-overlay");
   const sidebar = document.getElementById("sidebar");
-  const overlay = document.getElementById("sidebar-overlay");
-  const menuButton = document.getElementById("mobile-menu-button");
-  const closeButton = document.getElementById("sidebar-close-button"); // Removed from HTML but good safety
-  const menuOpenIcon = document.getElementById("menu-open-icon");
-  const menuCloseIcon = document.getElementById("menu-close-icon");
+  const openIcon = document.getElementById("menu-open-icon");
+  const closeIcon = document.getElementById("menu-close-icon");
 
-  function openSidebar() {
-    // Mobile logic: transform class needs to be handled differently if we changed the sidebar structure
-    // Since we removed the specialized mobile styling in CSS for the sake of Zen upgrade,
-    // we need to ensure the mobile classes are applied correctly.
-    // Assuming the sidebar has a wrapper or we toggle classes on it.
+  let isMobileMenuOpen = false;
 
-    // For simplicity in this Zen update:
-    sidebar?.classList.add("translate-x-0");
-    sidebar?.classList.remove("-translate-x-full");
+  function toggleMobileMenu() {
+    isMobileMenuOpen = !isMobileMenuOpen;
 
-    // Mobile positioning classes (override desktop defaults if needed)
-    sidebar?.classList.add(
-      "fixed",
-      "z-50",
-      "inset-y-0",
-      "left-0",
-      "w-72",
-      "shadow-2xl",
-    );
+    if (isMobileMenuOpen) {
+      // Open
+      sidebar?.classList.remove("hidden");
+      sidebar?.classList.add(
+        "fixed",
+        "inset-y-0",
+        "left-0",
+        "z-50",
+        "w-72",
+        "shadow-2xl",
+        "animate-slide-in",
+      );
+      sidebarOverlay?.classList.remove("hidden");
+      setTimeout(() => sidebarOverlay?.classList.add("opacity-100"), 10); // Fade in
 
-    overlay?.classList.remove("hidden");
-    menuOpenIcon?.classList.add("hidden");
-    menuCloseIcon?.classList.remove("hidden");
-    document.body.style.overflow = "hidden";
-  }
-
-  function closeSidebar() {
-    sidebar?.classList.remove("translate-x-0");
-    sidebar?.classList.add("-translate-x-full");
-
-    // Clean up mobile specific classes so desktop layout isn't affected if resized
-    // sidebar?.classList.remove("fixed", "z-50", "inset-y-0", "left-0", "w-72", "shadow-2xl");
-    // Actually, on desktop strict mode, these classes might be fine if hidden, but let's be safe.
-
-    overlay?.classList.add("hidden");
-    menuOpenIcon?.classList.remove("hidden");
-    menuCloseIcon?.classList.add("hidden");
-    document.body.style.overflow = "";
-  }
-
-  menuButton?.addEventListener("click", () => {
-    if (menuOpenIcon?.classList.contains("hidden")) {
-      closeSidebar();
+      openIcon?.classList.add("hidden");
+      closeIcon?.classList.remove("hidden");
+      document.body.style.overflow = "hidden"; // Prevent scrolling
     } else {
-      openSidebar();
-    }
-  });
+      // Close
+      sidebarOverlay?.classList.remove("opacity-100");
+      setTimeout(() => sidebarOverlay?.classList.add("hidden"), 300); // Wait for fade
 
-  overlay?.addEventListener("click", closeSidebar);
+      // Remove fixed classes but keep hidden logic for desktop/mobile switch
+      sidebar?.classList.remove(
+        "fixed",
+        "inset-y-0",
+        "left-0",
+        "z-50",
+        "w-72",
+        "shadow-2xl",
+        "animate-slide-in",
+      );
+      // Reset to original class state if needed (handled by CSS media queries mostly)
+
+      openIcon?.classList.remove("hidden");
+      closeIcon?.classList.add("hidden");
+      document.body.style.overflow = "";
+    }
+  }
+
+  mobileMenuButton?.addEventListener("click", toggleMobileMenu);
+  sidebarOverlay?.addEventListener("click", toggleMobileMenu);
+
+  // Close menu on route change (view transitions)
+  document.addEventListener("astro:page-load", () => {
+    if (isMobileMenuOpen) toggleMobileMenu();
+  });
 </script>
 
 <style>
-  /* Sidebar Mobile Default State: Hidden off-canvas */
-  @media (max-width: 1024px) {
-    #sidebar {
-      position: fixed;
-      top: 0;
-      left: 0;
-      height: 100vh;
-      z-index: 50;
-      width: 18rem; /* w-72 */
+  /* Custom Scrollbar */
+  .custom-scrollbar::-webkit-scrollbar {
+    width: 6px;
+  }
+  .custom-scrollbar::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .custom-scrollbar::-webkit-scrollbar-thumb {
+    background-color: #e7e5e4;
+    border-radius: 9999px;
+  }
+  .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    background-color: #d6d3d1;
+  }
+
+  /* Animations */
+  @keyframes slideIn {
+    from {
       transform: translateX(-100%);
-      transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-      box-shadow: 0 25px 50px -12px rgb(0 0 0 / 0.25);
+      opacity: 0;
     }
-    #sidebar.translate-x-0 {
+    to {
       transform: translateX(0);
+      opacity: 1;
     }
+  }
+  .animate-slide-in {
+    animation: slideIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
   }
 </style>
