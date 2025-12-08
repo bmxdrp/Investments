@@ -1,0 +1,344 @@
+---
+import Layout from "@layouts/default.astro";
+import { getUserGoals } from "@lib/goals";
+import { validateCsrf } from "@lib/csrf-validator";
+import CsrfField from "@components/CsrfField.astro";
+
+const userId = Astro.locals.userId;
+if (!userId) return Astro.redirect("/auth/login");
+
+const goals = await getUserGoals(userId);
+
+// Manejo de formulario (POST) para crear meta
+if (Astro.request.method === "POST") {
+    // Nota: Idealmente mover esto a endpoint API, pero por simplicidad en Astro se puede aquí
+    // Sin embargo, para consistencia con tu proyecto, deberíamos hacer fetch a API.
+    // Esta página solo renderiza.
+}
+---
+
+<Layout title="Mis Metas" activePage="goals">
+    <div class="max-w-7xl mx-auto space-y-6">
+        <div class="flex items-center justify-between">
+            <div>
+                <h1 class="text-3xl font-bold text-gray-900">
+                    Metas de Ahorro
+                </h1>
+                <p class="text-gray-600 mt-1">
+                    Planifica y visualiza tus objetivos financieros
+                </p>
+            </div>
+            <button
+                onclick="document.getElementById('newGoalModal').showModal()"
+                class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition flex items-center gap-2"
+            >
+                <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    class="h-5 w-5"
+                    viewBox="0 0 20 20"
+                    fill="currentColor"
+                >
+                    <path
+                        fill-rule="evenodd"
+                        d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z"
+                        clip-rule="evenodd"></path>
+                </svg>
+                Nueva Meta
+            </button>
+        </div>
+
+        <!-- Grid de Metas -->
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {
+                goals.map((goal) => {
+                    const progress = Math.min(
+                        (goal.current_amount / goal.target_amount) * 100,
+                        100,
+                    );
+                    return (
+                        <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow relative overflow-hidden">
+                            {goal.is_completed && (
+                                <div class="absolute top-0 right-0 bg-green-500 text-white text-xs font-bold px-3 py-1 rounded-bl-xl z-10">
+                                    ¡COMPLETADA!
+                                </div>
+                            )}
+                            <div class="flex justify-between items-start mb-4">
+                                <div
+                                    class="p-3 rounded-lg"
+                                    style={`background-color: ${goal.color}20; color: ${goal.color}`}
+                                >
+                                    <span class="text-2xl">
+                                        {goal.icon || "🎯"}
+                                    </span>
+                                </div>
+                                <div class="text-right">
+                                    <p class="text-sm text-gray-500">
+                                        Objetivo
+                                    </p>
+                                    <p class="font-bold text-gray-900">
+                                        {goal.target_amount.toLocaleString(
+                                            "es-CO",
+                                            {
+                                                style: "currency",
+                                                currency: goal.currency,
+                                                minimumFractionDigits: 0,
+                                            },
+                                        )}
+                                    </p>
+                                </div>
+                            </div>
+
+                            <h3 class="text-lg font-bold text-gray-900 mb-1">
+                                {goal.name}
+                            </h3>
+                            {goal.target_date && (
+                                <p class="text-xs text-gray-400 mb-4 flex items-center gap-1">
+                                    <svg
+                                        class="w-3 h-3"
+                                        fill="none"
+                                        stroke="currentColor"
+                                        viewBox="0 0 24 24"
+                                    >
+                                        <path
+                                            stroke-linecap="round"
+                                            stroke-linejoin="round"
+                                            stroke-width="2"
+                                            d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
+                                        />
+                                    </svg>
+                                    Fecha objetivo:{" "}
+                                    {new Date(
+                                        goal.target_date,
+                                    ).toLocaleDateString()}
+                                </p>
+                            )}
+
+                            <div class="mb-2 flex justify-between text-sm">
+                                <span class="font-medium text-gray-700">
+                                    {goal.current_amount.toLocaleString(
+                                        "es-CO",
+                                        {
+                                            style: "currency",
+                                            currency: goal.currency,
+                                            minimumFractionDigits: 0,
+                                        },
+                                    )}
+                                </span>
+                                <span class="text-gray-500">
+                                    {progress.toFixed(1)}%
+                                </span>
+                            </div>
+
+                            <div class="w-full bg-gray-100 rounded-full h-2.5 mb-6">
+                                <div
+                                    class="h-2.5 rounded-full transition-all duration-1000"
+                                    style={`width: ${progress}%; background-color: ${goal.color}`}
+                                />
+                            </div>
+
+                            <div class="flex gap-2">
+                                <button
+                                    onclick={`openUpdateModal(${JSON.stringify(goal)})`}
+                                    class="flex-1 bg-gray-50 text-gray-700 py-2 rounded-lg text-sm font-medium hover:bg-gray-100 transition"
+                                >
+                                    Actualizar
+                                </button>
+                            </div>
+                        </div>
+                    );
+                })
+            }
+
+            {
+                goals.length === 0 && (
+                    <div class="col-span-full text-center py-12 bg-white rounded-xl border border-dashed border-gray-300">
+                        <p class="text-gray-500 mb-4">
+                            No tienes metas configuradas aún.
+                        </p>
+                        <button
+                            onclick="document.getElementById('newGoalModal').showModal()"
+                            class="text-blue-600 font-medium hover:underline"
+                        >
+                            Crear una ahora
+                        </button>
+                    </div>
+                )
+            }
+        </div>
+    </div>
+
+    <!-- Modal Nueva Meta -->
+    <dialog
+        id="newGoalModal"
+        class="modal rounded-xl shadow-2xl p-0 w-full max-w-lg backdrop:bg-gray-900/50"
+    >
+        <div class="bg-white p-6">
+            <h3 class="text-xl font-bold mb-4">Nueva Meta de Ahorro</h3>
+            <form method="POST" action="/api/goals/create" class="space-y-4">
+                <!-- CSRF Field será inyectado via script o componente si fuera .astro puro, aqui usamos endpoint -->
+                <!-- Simple form -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1"
+                        >Nombre</label
+                    >
+                    <input
+                        type="text"
+                        name="name"
+                        required
+                        class="w-full rounded-lg border-gray-300 focus:ring-blue-500 focus:border-blue-500"
+                        placeholder="Ej: Viaje a Europa"
+                    />
+                </div>
+
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label
+                            class="block text-sm font-medium text-gray-700 mb-1"
+                            >Monto Objetivo</label
+                        >
+                        <input
+                            type="number"
+                            name="target_amount"
+                            required
+                            min="1"
+                            class="w-full rounded-lg border-gray-300"
+                            placeholder="0.00"
+                        />
+                    </div>
+                    <div>
+                        <label
+                            class="block text-sm font-medium text-gray-700 mb-1"
+                            >Moneda</label
+                        >
+                        <select
+                            name="currency"
+                            class="w-full rounded-lg border-gray-300"
+                        >
+                            <option value="COP">COP</option>
+                            <option value="USD">USD</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1"
+                        >Monto Actual (Inicial)</label
+                    >
+                    <input
+                        type="number"
+                        name="current_amount"
+                        value="0"
+                        min="0"
+                        class="w-full rounded-lg border-gray-300"
+                    />
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1"
+                        >Fecha Objetivo (Opcional)</label
+                    >
+                    <input
+                        type="date"
+                        name="target_date"
+                        class="w-full rounded-lg border-gray-300"
+                    />
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1"
+                        >Icono & Color</label
+                    >
+                    <div class="flex gap-2">
+                        <input
+                            type="text"
+                            name="icon"
+                            placeholder="Emoji (✈️)"
+                            class="w-20 rounded-lg border-gray-300 text-center"
+                        />
+                        <input
+                            type="color"
+                            name="color"
+                            value="#3b82f6"
+                            class="h-10 w-full rounded-lg cursor-pointer"
+                        />
+                    </div>
+                </div>
+
+                <div class="flex justify-end gap-3 mt-6">
+                    <button
+                        type="button"
+                        onclick="document.getElementById('newGoalModal').close()"
+                        class="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg"
+                        >Cancelar</button
+                    >
+                    <button
+                        type="submit"
+                        class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                        >Guardar Meta</button
+                    >
+                </div>
+            </form>
+        </div>
+    </dialog>
+
+    <!-- Modal Actualizar Progreso -->
+    <dialog
+        id="updateGoalModal"
+        class="modal rounded-xl shadow-2xl p-0 w-full max-w-sm backdrop:bg-gray-900/50"
+    >
+        <div class="bg-white p-6">
+            <h3 class="text-xl font-bold mb-4">Actualizar Ahorro</h3>
+            <form method="POST" action="/api/goals/update" class="space-y-4">
+                <input type="hidden" name="id" id="update_id" />
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1"
+                        >Nuevo Monto Actual</label
+                    >
+                    <input
+                        type="number"
+                        name="current_amount"
+                        id="update_amount"
+                        required
+                        min="0"
+                        class="w-full rounded-lg border-gray-300 text-lg font-bold"
+                    />
+                </div>
+
+                <div class="flex justify-end gap-3 mt-6">
+                    <button
+                        type="button"
+                        onclick="document.getElementById('updateGoalModal').close()"
+                        class="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg"
+                        >Cancelar</button
+                    >
+                    <button
+                        type="submit"
+                        class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
+                        >Actualizar</button
+                    >
+                </div>
+
+                <div class="pt-4 border-t border-gray-100 mt-4">
+                    <button
+                        type="submit"
+                        formaction="/api/goals/delete"
+                        formmethod="POST"
+                        class="text-xs text-red-500 hover:text-red-700 w-full text-center"
+                        onclick="return confirm('¿Eliminar esta meta?')"
+                    >
+                        Eliminar meta permanentemente
+                    </button>
+                </div>
+            </form>
+        </div>
+    </dialog>
+
+    <script is:inline>
+        function openUpdateModal(goal) {
+            document.getElementById("update_id").value = goal.id;
+            document.getElementById("update_amount").value =
+                goal.current_amount;
+            document.getElementById("updateGoalModal").showModal();
+        }
+    </script>
+</Layout>

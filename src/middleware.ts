@@ -116,6 +116,21 @@ export const onRequest = defineMiddleware(async (ctx, next) => {
   locals.userId = null;
   locals.userRole = null;
 
+  // Gestionar token CSRF (Persistente vía Cookie)
+  const { generateCsrfToken } = await import('@lib/csrf');
+
+  // Intentar leer token existente de la cookie
+  const cookies = request.headers.get("cookie") || "";
+  const csrfCookieMatch = cookies.match(/(?:^|; )csrf-token=([^;]+)/);
+  let csrfToken = csrfCookieMatch?.[1];
+
+  // Si no existe o es inválido, generar uno nuevo
+  if (!csrfToken) {
+    csrfToken = generateCsrfToken();
+  }
+
+  locals.csrfToken = csrfToken;
+
   // Extraer sessionId de cookies
   const cookieHeader = request.headers.get("cookie") || "";
   const sessionId = extractSessionId(cookieHeader);
@@ -143,7 +158,105 @@ export const onRequest = defineMiddleware(async (ctx, next) => {
     return createForbiddenResponse(url);
   }
 
-  return next();
+  // Continuar con la petición
+  const response = await next();
+
+  // ========================================
+  // ✅ SOLUCIÓN: CLONAR LA RESPUESTA PARA PODER MODIFICAR HEADERS
+  // ========================================
+  const newResponse = new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers: new Headers(response.headers), // Clonar headers
+  });
+
+  // Guardar/Renovar cookie CSRF
+  if (locals.csrfToken) {
+    newResponse.headers.append('Set-Cookie', `csrf-token=${locals.csrfToken}; Path=/; HttpOnly; SameSite=Lax; Max-Age=3600`); // 1 hora
+  }
+
+  // ========================================
+  // SECURITY HEADERS
+  // ========================================
+
+  // Prevenir clickjacking - no permitir que el sitio sea embebido en iframes
+  newResponse.headers.set('X-Frame-Options', 'DENY');
+
+  // Prevenir MIME type sniffing
+  newResponse.headers.set('X-Content-Type-Options', 'nosniff');
+
+  // Habilitar protección XSS del navegador (legacy, pero útil para navegadores antiguos)
+  newResponse.headers.set('X-XSS-Protection', '1; mode=block');
+
+  // Controlar qué información de referrer se envía
+  newResponse.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
+
+  // Forzar HTTPS en producción (HSTS)
+  if (import.meta.env.PROD) {
+    newResponse.headers.set(
+      'Strict-Transport-Security',
+      'max-age=31536000; includeSubDomains; preload'
+    );
+  }
+
+  // Controlar permisos de APIs del navegador
+  newResponse.headers.set(
+    'Permissions-Policy',
+    'geolocation=(), microphone=(), camera=(), payment=(), usb=(), magnetometer=(), gyroscope=()'
+  );
+
+  // Content Security Policy (CSP)
+  const cspDirectives = [
+    "default-src 'self'",
+    "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
+    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+    "font-src 'self' https://fonts.gstatic.com",
+    "img-src 'self' data: https: blob:",
+    "connect-src 'self'",
+    "frame-ancestors 'none'",
+    "base-uri 'self'",
+    "form-action 'self'",
+  ];
+  newResponse.headers.set('Content-Security-Policy', cspDirectives.join('; '));
+
+  // ========================================
+  // CORS CONFIGURATION
+  // ========================================
+
+  const origin = request.headers.get('origin');
+
+  // Lista de orígenes permitidos
+  const allowedOrigins = [
+    'http://localhost:4321',
+    'http://localhost:3000',
+    'https://yourdomain.com',
+    'https://www.yourdomain.com',
+  ];
+
+  // En desarrollo, permitir localhost
+  if (import.meta.env.DEV && origin?.includes('localhost')) {
+    newResponse.headers.set('Access-Control-Allow-Origin', origin);
+    newResponse.headers.set('Access-Control-Allow-Credentials', 'true');
+    newResponse.headers.set('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+    newResponse.headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  }
+  // En producción, solo permitir orígenes específicos
+  else if (origin && allowedOrigins.includes(origin)) {
+    newResponse.headers.set('Access-Control-Allow-Origin', origin);
+    newResponse.headers.set('Access-Control-Allow-Credentials', 'true');
+    newResponse.headers.set('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+    newResponse.headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  }
+
+  // Manejar preflight requests (OPTIONS)
+  if (request.method === 'OPTIONS') {
+    return new Response(null, {
+      status: 204,
+      headers: newResponse.headers,
+    });
+  }
+
+  return newResponse;
 });
 
 // Función de utilidad para limpiar cache periódicamente (opcional)
