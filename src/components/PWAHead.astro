@@ -1,0 +1,26 @@
+---
+
+---
+
+<!-- PWA Meta Tags -->
+<meta name="theme-color" content="#ffffff" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="default" />
+<meta name="apple-mobile-web-app-title" content="Capyte" />
+<link rel="apple-touch-icon" href="/logo.png" />
+<link rel="manifest" href="/manifest.webmanifest" />
+
+<script>
+    // @ts-ignore
+    import { registerSW } from "virtual:pwa-register";
+
+    registerSW({
+        immediate: true,
+        onNeedRefresh() {
+            console.log("PWA: New content available, reload to update.");
+        },
+        onOfflineReady() {
+            console.log("PWA: Offline ready");
+        },
+    });
+</script>

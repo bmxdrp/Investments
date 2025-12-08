@@ -8,7 +8,8 @@
     "preview": "astro preview",
     "astro": "astro",
     "test": "jest",
-    "test:watch": "jest --watch"
+    "test:watch": "jest --watch",
+    "test:security": "node scripts/test-security-headers.js"
   },
   "dependencies": {
     "@astrojs/vercel": "^9.0.1",
@@ -21,12 +22,15 @@
     "nodemailer": "^7.0.11",
     "resend": "^6.5.2",
     "tailwindcss": "^4.1.17",
-    "zod": "^4.1.12"
+    "zod": "^4.1.13"
   },
   "devDependencies": {
     "@types/jest": "^30.0.0",
     "@types/nodemailer": "^7.0.4",
+    "dotenv": "^17.2.3",
     "jest": "^30.2.0",
-    "ts-jest": "^29.4.5"
+    "ts-jest": "^29.4.5",
+    "vite-plugin-pwa": "^1.2.0",
+    "workbox-window": "^7.4.0"
   }
 }

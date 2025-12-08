@@ -1,0 +1,91 @@
+---
+import "@styles/global.css";
+import Layout from "@layouts/default.astro";
+
+// Página Offline Minimalista Zen
+---
+
+<!doctype html>
+<html lang="es">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Sin Conexión - Capyte</title>
+        <link rel="icon" type="image/png" href="/logo.png" />
+        <meta name="theme-color" content="#1c1917" />
+        <style>
+            body {
+                font-family:
+                    ui-sans-serif,
+                    system-ui,
+                    -apple-system,
+                    BlinkMacSystemFont,
+                    "Segoe UI",
+                    Roboto,
+                    "Helvetica Neue",
+                    Arial,
+                    sans-serif;
+            }
+        </style>
+    </head>
+    <body class="min-h-screen bg-stone-50 flex items-center justify-center p-6">
+        <div class="max-w-md w-full text-center space-y-6 animate-fade-in">
+            <div class="relative w-24 h-24 mx-auto">
+                <div
+                    class="absolute inset-0 bg-stone-200 rounded-full animate-pulse"
+                >
+                </div>
+                <div
+                    class="absolute inset-2 bg-white rounded-full flex items-center justify-center shadow-sm"
+                >
+                    <svg
+                        class="w-10 h-10 text-stone-400"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                    >
+                        <path
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            stroke-width="2"
+                            d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z"
+                        ></path>
+                        <path
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            stroke-width="2"
+                            d="M12 12l2 2m0 0l2 2m-2-2l-2 2m2-2l2-2"></path>
+                    </svg>
+                </div>
+            </div>
+
+            <div class="space-y-2">
+                <h1 class="text-2xl font-bold text-stone-900 tracking-tight">
+                    Estás desconectado
+                </h1>
+                <p class="text-stone-500">
+                    No podemos conectar con el servidor en este momento. Revisa
+                    tu conexión a internet.
+                </p>
+            </div>
+
+            <div class="pt-4">
+                <button
+                    onclick="window.location.reload()"
+                    class="bg-stone-900 text-white px-6 py-3 rounded-xl font-medium shadow-lg shadow-stone-900/10 hover:shadow-stone-900/20 hover:-translate-y-0.5 transition-all"
+                >
+                    Intentar de nuevo
+                </button>
+            </div>
+
+            <div class="pt-8">
+                <a
+                    href="/dashboard"
+                    class="text-sm text-stone-400 hover:text-stone-600 underline decoration-stone-300"
+                >
+                    Ir al Dashboard (Caché)
+                </a>
+            </div>
+        </div>
+    </body>
+</html>
