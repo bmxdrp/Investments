@@ -1,6 +1,6 @@
 ---
 import Layout from "@layouts/admin.astro";
-import { sql } from "@lib/db";
+import { setRLSUser, sql } from "@lib/db";
 
 const userId = Astro.locals.userId;
 if (!userId) {
@@ -28,7 +28,7 @@ if (Astro.request.method === "POST") {
         }
 
         // Insertar
-        await sql.unsafe(`SET app.user_id = '${userId}'`);
+        await setRLSUser(userId);
         await sql`
       INSERT INTO roles (name, description)
       VALUES (${name}, ${description})

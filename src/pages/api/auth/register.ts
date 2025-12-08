@@ -2,42 +2,59 @@ import type { APIRoute } from "astro";
 import { z } from "zod";
 import argon2 from "argon2";
 import { randomUUID } from "node:crypto";
-import { sql } from "@lib/db";
+import { setRLSUser, sql } from "@lib/db";
 import nodemailer from "nodemailer";
+import { applyRateLimit } from "@lib/ratelimit";
+import { validateCsrf } from "@lib/csrf-validator";
+import { handleApiError } from "@lib/error-handler";
 
 const registerSchema = z.object({
   email: z.string().email(),
-  password: z.string().min(6),
-  password_confirm: z.string().min(6),
+  password: z.string().min(8), // Mejorado a 8 según auditoría
+  password_confirm: z.string().min(8),
 });
 
-export const POST: APIRoute = async ({ request }) => {
+export const POST: APIRoute = async (context) => {
+  const { request } = context;
   try {
+    // 🔒 Validar CSRF
+    const csrfResult = await validateCsrf(context, '/auth/register');
+    if (!csrfResult.success) {
+      return csrfResult.response!;
+    }
+
+    // 🔒 Rate limiting - 3 intentos cada 15 minutos
+    const rateLimitResult = await applyRateLimit(request, '/api/auth/register', 'email');
+    if (!rateLimitResult.success) {
+      return rateLimitResult.response!;
+    }
+
     // Generar UUID como id
     const id = randomUUID();
-    const form = Object.fromEntries(await request.formData());
+    const form = Object.fromEntries(csrfResult.formData!);
     const parsed = registerSchema.parse(form);
 
     if (parsed.password !== parsed.password_confirm) {
-      return new Response(JSON.stringify({ error: "Las contraseñas no coinciden" }), {
-        status: 400,
-      });
+      return Response.redirect(new URL("/auth/register?error=" + encodeURIComponent("Las contraseñas no coinciden"), request.url), 303);
     }
+
     // Verificar si ya existe
     const existing = await sql`
       SELECT id FROM users WHERE email = ${parsed.email}
     `;
 
     if (existing.length > 0) {
-      console.error("Error:", "El correo ya está registrado");
-      return Response.redirect(new URL("/auth/register?error=" + encodeURIComponent("El correo ya está registrado"), request.url), 303);
+      // 🛡️ SECURITY: Prevención de enumeración de usuarios
+      // Retornamos éxito simulado. En un sistema real, enviaríamos un email diciendo "Ya tienes cuenta".
+      // No revelamos que el correo ya existe.
+      return Response.redirect(new URL("/auth/register?success=1", request.url), 303);
     }
 
     // Encriptar contraseña
     const password_hash = await argon2.hash(parsed.password);
 
     // Insertar usuario (sin verificar)
-    await sql.unsafe(`SET app.user_id = '${id}'`);
+    await setRLSUser(id);
     await sql`
       INSERT INTO users (id, email, password_hash, email_verified_at)
       VALUES (${id}, ${parsed.email}, ${password_hash}, NULL);
@@ -84,7 +101,14 @@ export const POST: APIRoute = async ({ request }) => {
     return Response.redirect(new URL("/auth/register?success=1", request.url), 303);
 
   } catch (err) {
-    console.error(err);
-    return Response.redirect(new URL("/auth/register?error=" + encodeURIComponent("Error al registrar el usuario"), request.url), 303);
+    if (err instanceof z.ZodError) {
+      return Response.redirect(new URL("/auth/register?error=" + encodeURIComponent("Datos inválidos"), request.url), 303);
+    }
+
+    return handleApiError({
+      error: err,
+      logMsg: "Error crítico en registro de usuario",
+      type: new URL("/auth/register", request.url).toString()
+    });
   }
 };

@@ -1,6 +1,6 @@
 ---
 import Layout from "@layouts/admin.astro";
-import { sql } from "@lib/db";
+import { setRLSUser, sql } from "@lib/db";
 
 const userId = Astro.locals.userId;
 if (!userId) {
@@ -13,7 +13,7 @@ const errorMessage = Astro.url.searchParams.get("error");
 
 let roles: any[] = [];
 try {
-    await sql.unsafe(`SET app.user_id = '${userId}'`);
+    await setRLSUser(userId);
 
     roles = await sql`
     SELECT r.id, r.name, r.description, COUNT(u.id) as user_count

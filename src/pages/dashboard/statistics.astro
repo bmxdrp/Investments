@@ -112,7 +112,9 @@ const portfolioStartBalanceRes = await sql`
   JOIN accounts a ON a.id = t.account_id
   WHERE a.user_id = ${userId}
 `;
-const portfolioStartBalance = parseFloat(portfolioStartBalanceRes[0]?.total || 0);
+const portfolioStartBalance = parseFloat(
+  portfolioStartBalanceRes[0]?.total || 0,
+);
 
 const portfolioCurrentBalanceRes = await sql`
   SELECT SUM(
@@ -165,8 +167,11 @@ const portfolioWithdraws = parseFloat(portfolioWithdrawsRes[0]?.total || 0);
 const portfolioNetFlow = portfolioContribs - portfolioWithdraws;
 
 const portfolioGain = totalPortfolio - portfolioStartBalance - portfolioNetFlow;
-const portfolioAverageCapital = portfolioStartBalance + (portfolioNetFlow / 2);
-const portfolioROI = portfolioAverageCapital > 0 ? (portfolioGain / portfolioAverageCapital) * 100 : 0;
+const portfolioAverageCapital = portfolioStartBalance + portfolioNetFlow / 2;
+const portfolioROI =
+  portfolioAverageCapital > 0
+    ? (portfolioGain / portfolioAverageCapital) * 100
+    : 0;
 
 // ============================================
 // CALCULAR ESTADÍSTICAS POR CUENTA
@@ -203,7 +208,8 @@ const accountsWithStats = await Promise.all(
         ORDER BY date DESC, id DESC 
         LIMIT 1
       `;
-      const startBalance = startBalanceRes.length > 0 ? Number(startBalanceRes[0].new_value) : 0;
+      const startBalance =
+        startBalanceRes.length > 0 ? Number(startBalanceRes[0].new_value) : 0;
 
       // Flujos EXTERNOS de la cuenta padre
       const [periodContribsExt, periodWithdrawsExt] = await Promise.all([
@@ -257,7 +263,10 @@ const accountsWithStats = await Promise.all(
             ORDER BY date DESC, id DESC 
             LIMIT 1
           `;
-          const subStartBalance = subStartBalanceRes.length > 0 ? Number(subStartBalanceRes[0].new_value) : 0;
+          const subStartBalance =
+            subStartBalanceRes.length > 0
+              ? Number(subStartBalanceRes[0].new_value)
+              : 0;
 
           const [subContribsRes, subWithdrawsRes] = await Promise.all([
             sql`
@@ -284,12 +293,16 @@ const accountsWithStats = await Promise.all(
 
           const subGain = subCurrent - subStartBalance - subNetFlow;
           const subAvgCapital = subStartBalance + subNetFlow / 2;
-          const subROI = subAvgCapital > 0 ? (subGain / subAvgCapital) * 100 : 0;
+          const subROI =
+            subAvgCapital > 0 ? (subGain / subAvgCapital) * 100 : 0;
 
           const subMetrics = calculateMetrics(subValues);
 
           return {
-            ...sub,
+            id: sub.id,
+            name: sub.name,
+            currency: sub.currency,
+            parent_account_id: sub.parent_account_id,
             currentValue: subCurrent,
             currentValueCOP: toCOP(subCurrent, sub.currency),
             roi: subROI,
@@ -300,7 +313,7 @@ const accountsWithStats = await Promise.all(
             subNetFlow,
             startBalance: subStartBalance,
             historyValues: subValues, // Guardar para consolidar
-            historyDates: subHistory.map(h => h.date),
+            historyDates: subHistory.map((h) => h.date),
           };
         }),
       );
@@ -309,126 +322,148 @@ const accountsWithStats = await Promise.all(
       // 3. CREAR HISTORIAL CONSOLIDADO (padre + subcuentas)
       // ========================================
       // Obtener todas las fechas únicas
-// ========================================
-// 3. CREAR HISTORIAL CONSOLIDADO CON INTERPOLACIÓN DIARIA
-// ========================================
+      // ========================================
+      // 3. CREAR HISTORIAL CONSOLIDADO CON INTERPOLACIÓN DIARIA
+      // ========================================
 
-// Generar TODAS las fechas del período (no solo las que tienen transacciones)
-const startDate = new Date();
-startDate.setDate(startDate.getDate() - periodDays);
-const endDate = new Date();
+      // Generar TODAS las fechas del período (no solo las que tienen transacciones)
+      const startDate = new Date();
+      startDate.setDate(startDate.getDate() - periodDays);
+      const endDate = new Date();
 
-const allDates = [];
-for (let d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + 1)) {
-  allDates.push(d.toISOString().split('T')[0]);
-}
-
-// Para cada fecha, obtener el valor del padre + subcuentas
-const consolidatedValues = allDates.map(dateStr => {
-  // Valor del padre: buscar la última transacción antes o igual a esta fecha
-  let parentValue = 0;
-  for (let i = history.length - 1; i >= 0; i--) {
-    const txDate = new Date(history[i].date).toISOString().split('T')[0];
-    if (txDate <= dateStr) {
-      parentValue = Number(history[i].new_value);
-      break;
-    }
-  }
-  
-  // Valor de subcuentas: última transacción antes o igual a esta fecha
-  const subsValue = subsWithStats.reduce((sum, sub) => {
-    if (sub.historyValues.length === 0) return sum;
-    
-    let subValue = 0;
-    for (let i = sub.historyValues.length - 1; i >= 0; i--) {
-      const txDate = new Date(sub.historyDates[i]).toISOString().split('T')[0];
-      if (txDate <= dateStr) {
-        subValue = sub.historyValues[i];
-        break;
+      const allDates = [];
+      for (
+        let d = new Date(startDate);
+        d <= endDate;
+        d.setDate(d.getDate() + 1)
+      ) {
+        allDates.push(d.toISOString().split("T")[0]);
       }
-    }
-    return sum + subValue;
-  }, 0);
-  
-  return parentValue + subsValue;
-});
 
-// Filtrar valores cero al inicio (antes de cualquier transacción)
-const firstNonZeroIndex = consolidatedValues.findIndex(v => v > 0);
-const filteredValues = firstNonZeroIndex >= 0 
-  ? consolidatedValues.slice(firstNonZeroIndex) 
-  : consolidatedValues;
+      // Para cada fecha, obtener el valor del padre + subcuentas
+      const consolidatedValues = allDates.map((dateStr) => {
+        // Valor del padre: buscar la última transacción antes o igual a esta fecha
+        let parentValue = 0;
+        for (let i = history.length - 1; i >= 0; i--) {
+          const txDate = new Date(history[i].date).toISOString().split("T")[0];
+          if (txDate <= dateStr) {
+            parentValue = Number(history[i].new_value);
+            break;
+          }
+        }
 
-// ========================================
-// 4. CALCULAR MÉTRICAS CONSOLIDADAS
-// ========================================
-const metrics = calculateMetrics(filteredValues);
+        // Valor de subcuentas: última transacción antes o igual a esta fecha
+        const subsValue = subsWithStats.reduce((sum, sub) => {
+          if (sub.historyValues.length === 0) return sum;
 
-const totalCurrentValue = currentValue + subsWithStats.reduce((sum, s) => sum + s.currentValue, 0);
-const totalStartBalance = startBalance + subsWithStats.reduce((sum, s) => sum + s.startBalance, 0);
-const totalSubNetFlowExt = subsWithStats.reduce((sum, s) => sum + (s.subNetFlow || 0), 0);
+          let subValue = 0;
+          for (let i = sub.historyValues.length - 1; i >= 0; i--) {
+            const txDate = new Date(sub.historyDates[i])
+              .toISOString()
+              .split("T")[0];
+            if (txDate <= dateStr) {
+              subValue = sub.historyValues[i];
+              break;
+            }
+          }
+          return sum + subValue;
+        }, 0);
 
-const totalGain = totalCurrentValue - totalStartBalance - netFlowExt - totalSubNetFlowExt;
-const totalAvgCapital = totalStartBalance + (netFlowExt + totalSubNetFlowExt) / 2;
-const consolidatedROI = totalAvgCapital > 0 ? (totalGain / totalAvgCapital) * 100 : 0;
+        return parentValue + subsValue;
+      });
 
-// Proyecciones basadas en valores consolidados DIARIOS
-const projection3m = calculateProjection(filteredValues, 90);
-const projection6m = calculateProjection(filteredValues, 180);
-const projection12m = calculateProjection(filteredValues, 365);
+      // Filtrar valores cero al inicio (antes de cualquier transacción)
+      const firstNonZeroIndex = consolidatedValues.findIndex((v) => v > 0);
+      const filteredValues =
+        firstNonZeroIndex >= 0
+          ? consolidatedValues.slice(firstNonZeroIndex)
+          : consolidatedValues;
 
-const beta = 0.8 + Math.random() * 0.8;
+      // ========================================
+      // 4. CALCULAR MÉTRICAS CONSOLIDADAS
+      // ========================================
+      const metrics = calculateMetrics(filteredValues);
 
-let wins = 0;
-for (let i = 1; i < filteredValues.length; i++) {
-  if (filteredValues[i] > filteredValues[i - 1]) wins++;
-}
-const winRate = filteredValues.length > 1 ? (wins / (filteredValues.length - 1)) * 100 : 0;
+      const totalCurrentValue =
+        currentValue +
+        subsWithStats.reduce((sum, s) => sum + s.currentValue, 0);
+      const totalStartBalance =
+        startBalance +
+        subsWithStats.reduce((sum, s) => sum + s.startBalance, 0);
+      const totalSubNetFlowExt = subsWithStats.reduce(
+        (sum, s) => sum + (s.subNetFlow || 0),
+        0,
+      );
 
-let riskLevel = "bajo";
-if (metrics.volatility > 30) riskLevel = "muy alto";
-else if (metrics.volatility > 15) riskLevel = "alto";
-else if (metrics.volatility > 8) riskLevel = "medio";
+      const totalGain =
+        totalCurrentValue - totalStartBalance - netFlowExt - totalSubNetFlowExt;
+      const totalAvgCapital =
+        totalStartBalance + (netFlowExt + totalSubNetFlowExt) / 2;
+      const consolidatedROI =
+        totalAvgCapital > 0 ? (totalGain / totalAvgCapital) * 100 : 0;
 
-const trend =
-  projection3m > totalCurrentValue
-    ? "up"
-    : projection3m < totalCurrentValue
-      ? "down"
-      : "stable";
+      // Proyecciones basadas en valores consolidados DIARIOS
+      const projection3m = calculateProjection(filteredValues, 90);
+      const projection6m = calculateProjection(filteredValues, 180);
+      const projection12m = calculateProjection(filteredValues, 365);
 
-const currentValueCOP = toCOP(currentValue, account.currency);
-const totalCurrentCOP =
-  currentValueCOP +
-  subsWithStats.reduce((sum, s) => sum + s.currentValueCOP, 0);
+      const beta = 0.8 + Math.random() * 0.8;
 
-const gainCOP = toCOP(totalGain, account.currency);
-const averageCapitalCOP = toCOP(totalAvgCapital, account.currency);
+      let wins = 0;
+      for (let i = 1; i < filteredValues.length; i++) {
+        if (filteredValues[i] > filteredValues[i - 1]) wins++;
+      }
+      const winRate =
+        filteredValues.length > 1
+          ? (wins / (filteredValues.length - 1)) * 100
+          : 0;
 
-return {
-  ...account,
-  currentValue: totalCurrentValue,
-  currentValueCOP,
-  totalCurrentCOP,
-  roi: consolidatedROI,
-  volatility: metrics.volatility,
-  sharpe: metrics.sharpe,
-  maxDrawdown: metrics.maxDrawdown,
-  avgReturn: metrics.avgReturn,
-  beta,
-  winRate,
-  riskLevel,
-  projection3m,
-  projection6m,
-  projection12m,
-  trend,
-  subaccounts: subsWithStats,
-  historyLength: filteredValues.length, // Ahora mostrará ~19 días en vez de 3
-  gainCOP,
-  averageCapitalCOP,
-  allocation: 0,
-};
-}),
+      let riskLevel = "bajo";
+      if (metrics.volatility > 30) riskLevel = "muy alto";
+      else if (metrics.volatility > 15) riskLevel = "alto";
+      else if (metrics.volatility > 8) riskLevel = "medio";
+
+      const trend =
+        projection3m > totalCurrentValue
+          ? "up"
+          : projection3m < totalCurrentValue
+            ? "down"
+            : "stable";
+
+      const currentValueCOP = toCOP(currentValue, account.currency);
+      const totalCurrentCOP =
+        currentValueCOP +
+        subsWithStats.reduce((sum, s) => sum + s.currentValueCOP, 0);
+
+      const gainCOP = toCOP(totalGain, account.currency);
+      const averageCapitalCOP = toCOP(totalAvgCapital, account.currency);
+
+      return {
+        ...account,
+        currentValue: totalCurrentValue,
+        name: account.name,
+        currency: account.currency,
+        currentValueCOP,
+        totalCurrentCOP,
+        roi: consolidatedROI,
+        volatility: metrics.volatility,
+        sharpe: metrics.sharpe,
+        maxDrawdown: metrics.maxDrawdown,
+        avgReturn: metrics.avgReturn,
+        beta,
+        winRate,
+        riskLevel,
+        projection3m,
+        projection6m,
+        projection12m,
+        trend,
+        subaccounts: subsWithStats,
+        historyLength: filteredValues.length, // Ahora mostrará ~19 días en vez de 3
+        gainCOP,
+        averageCapitalCOP,
+        allocation: 0,
+      };
+    }),
 );
 
 // Calcular allocation y métricas del portfolio
@@ -831,7 +866,30 @@ if (losingAccounts.length > 0) {
 
       <div class="bg-white rounded-xl p-6 shadow-sm border border-slate-200">
         <div class="flex justify-between items-start mb-2">
-          <p class="text-sm text-slate-600 font-medium">Sharpe Ratio</p>
+          <p class="text-sm text-slate-600 font-medium flex items-center gap-1">
+            Rentabilidad Ajustada
+            <span class="group relative cursor-help">
+              <svg
+                class="w-4 h-4 text-slate-400"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                ></path>
+              </svg>
+              <span
+                class="invisible group-hover:visible absolute left-0 top-6 w-64 bg-slate-800 text-white text-xs rounded p-2 z-10"
+              >
+                Mide qué tan bien compensa el retorno por el riesgo tomado.
+                Mayor a 1 es bueno.
+              </span>
+            </span>
+          </p>
           <span
             class={`text-xs px-2 py-1 rounded ${avgSharpe > 1 ? "bg-green-100 text-green-700" : "bg-orange-100 text-orange-700"}`}
           >
@@ -841,7 +899,7 @@ if (losingAccounts.length > 0) {
         <p class="text-3xl font-bold text-slate-900">
           {avgSharpe.toFixed(2)}
         </p>
-        <p class="text-xs text-slate-500 mt-1">Retorno ajustado por riesgo</p>
+        <p class="text-xs text-slate-500 mt-1">Ganancia vs riesgo</p>
       </div>
 
       <div class="bg-white rounded-xl p-6 shadow-sm border border-slate-200">
@@ -865,15 +923,38 @@ if (losingAccounts.length > 0) {
 
       <div class="bg-white rounded-xl p-6 shadow-sm border border-slate-200">
         <div class="flex justify-between items-start mb-2">
-          <p class="text-sm text-slate-600 font-medium">Max Drawdown</p>
+          <p class="text-sm text-slate-600 font-medium flex items-center gap-1">
+            Peor Pérdida
+            <span class="group relative cursor-help">
+              <svg
+                class="w-4 h-4 text-slate-400"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                ></path>
+              </svg>
+              <span
+                class="invisible group-hover:visible absolute left-0 top-6 w-64 bg-slate-800 text-white text-xs rounded p-2 z-10"
+              >
+                La mayor caída de valor desde un punto máximo. Indica el peor
+                escenario que has experimentado.
+              </span>
+            </span>
+          </p>
           <span class="text-xs px-2 py-1 rounded bg-red-100 text-red-700"
-            >Peor caída</span
+            >Desde el pico</span
           >
         </div>
         <p class="text-3xl font-bold text-red-600">
           {portfolioMaxDrawdown.toFixed(1)}%
         </p>
-        <p class="text-xs text-slate-500 mt-1">Mayor pérdida desde pico</p>
+        <p class="text-xs text-slate-500 mt-1">Mayor caída registrada</p>
       </div>
 
       <div class="bg-white rounded-xl p-6 shadow-sm border border-slate-200">
@@ -964,7 +1045,7 @@ if (losingAccounts.length > 0) {
                           {account.name}
                         </p>
                         <p class="text-xs text-slate-500">
-                          {account.currency} • Sharpe:{" "}
+                          {account.currency} • Rent. Ajustada:{" "}
                           {account.sharpe.toFixed(2)}
                         </p>
                       </div>
@@ -1027,7 +1108,7 @@ if (losingAccounts.length > 0) {
                           {account.name}
                         </p>
                         <p class="text-xs text-slate-500">
-                          {account.currency} • Sharpe:{" "}
+                          {account.currency} • Rent. Ajustada:{" "}
                           {account.sharpe.toFixed(2)}
                         </p>
                       </div>
@@ -1223,13 +1304,53 @@ if (losingAccounts.length > 0) {
 
               <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
                 <div class="bg-slate-50 rounded-lg p-3">
-                  <p class="text-xs text-slate-600 mb-1">Sharpe Ratio</p>
+                  <p class="text-xs text-slate-600 mb-1 flex items-center gap-1">
+                    Rentabilidad Ajustada
+                    <span class="group relative cursor-help">
+                      <svg
+                        class="w-3 h-3 text-slate-400"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                          stroke-width="2"
+                          d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                        />
+                      </svg>
+                      <span class="invisible group-hover:visible absolute left-0 top-5 w-48 bg-slate-800 text-white text-xs rounded p-2 z-10">
+                        Ganancia ajustada por riesgo
+                      </span>
+                    </span>
+                  </p>
                   <p class="text-lg font-bold text-slate-900">
                     {account.sharpe.toFixed(2)}
                   </p>
                 </div>
                 <div class="bg-slate-50 rounded-lg p-3">
-                  <p class="text-xs text-slate-600 mb-1">Beta</p>
+                  <p class="text-xs text-slate-600 mb-1 flex items-center gap-1">
+                    Correlación
+                    <span class="group relative cursor-help">
+                      <svg
+                        class="w-3 h-3 text-slate-400"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                          stroke-width="2"
+                          d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                        />
+                      </svg>
+                      <span class="invisible group-hover:visible absolute left-0 top-5 w-48 bg-slate-800 text-white text-xs rounded p-2 z-10">
+                        Qué tanto se mueve con el mercado
+                      </span>
+                    </span>
+                  </p>
                   <p class="text-lg font-bold text-slate-900">
                     {account.beta.toFixed(2)}
                   </p>
@@ -1241,7 +1362,7 @@ if (losingAccounts.length > 0) {
                   </p>
                 </div>
                 <div class="bg-slate-50 rounded-lg p-3">
-                  <p class="text-xs text-slate-600 mb-1">Max Drawdown</p>
+                  <p class="text-xs text-slate-600 mb-1">Peor Pérdida</p>
                   <p class="text-lg font-bold text-red-600">
                     {account.maxDrawdown.toFixed(1)}%
                   </p>
@@ -1328,7 +1449,27 @@ if (losingAccounts.length > 0) {
               <div class="border-t border-slate-200 pt-4">
                 <div class="grid grid-cols-3 gap-4 text-center">
                   <div>
-                    <p class="text-xs text-slate-600 mb-1">Win Rate</p>
+                    <p class="text-xs text-slate-600 mb-1 flex items-center gap-1">
+                      Días Positivos
+                      <span class="group relative cursor-help">
+                        <svg
+                          class="w-3 h-3 text-slate-400"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            stroke-width="2"
+                            d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                          />
+                        </svg>
+                        <span class="invisible group-hover:visible absolute left-0 top-5 w-48 bg-slate-800 text-white text-xs rounded p-2 z-10">
+                          Porcentaje de días con ganancias
+                        </span>
+                      </span>
+                    </p>
                     <p class="text-lg font-bold text-slate-900">
                       {account.winRate.toFixed(0)}%
                     </p>
@@ -1383,8 +1524,8 @@ if (losingAccounts.length > 0) {
                           </span>
                         </div>
                         <p class="text-xs text-slate-500">
-                          Vol: {sub.volatility.toFixed(1)}% • Sharpe:{" "}
-                          {sub.sharpe.toFixed(2)}
+                          Variabilidad: {sub.volatility.toFixed(1)}% • Rent.
+                          Ajustada: {sub.sharpe.toFixed(2)}
                         </p>
                       </div>
                     ))}

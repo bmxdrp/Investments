@@ -1,6 +1,6 @@
 ---
 import Layout from "@layouts/admin.astro";
-import { sql } from "@lib/db";
+import { setRLSUser, sql } from "@lib/db";
 import { asRows } from "@lib/db";
 
 const userId = Astro.locals.userId;
@@ -43,7 +43,7 @@ if (Astro.request.method === "POST") {
         const id = randomUUID();
 
         // Insertar
-        await sql.unsafe(`SET app.user_id = '${userId}'`); // Audit log context if needed
+        await setRLSUser(userId); // Audit log context if needed
         await sql`
       INSERT INTO users (id, email, password_hash, role_id)
       VALUES (${id}, ${email}, ${passwordHash}, ${roleId || null})

@@ -1,13 +1,13 @@
 ---
 // src/pages/dashboard/activity.astro
 import Default from "@layouts/default.astro";
-import { sql } from "@lib/db";
+import { setRLSUser, sql } from "@lib/db";
 
 const userId = Astro.locals.userId;
 if (!userId) {
   return Astro.redirect("/auth/login?returnTo=/dashboard/activity");
 }
-await sql.unsafe(`SET app.user_id = '${userId}'`);
+await setRLSUser(userId);
 
 // Obtener tasa de cambio actual
 const latestRate = await sql`
@@ -38,6 +38,18 @@ const accountsWithValues = await sql`
       ),
       0
     ) AS current_value,
+
+    COALESCE(
+      (
+        SELECT t.previous_value
+        FROM transactions t
+        WHERE t.account_id = a.id
+          AND t.user_id = ${userId}
+        ORDER BY t.date DESC, t.created_at DESC, t.id DESC
+        LIMIT 1
+      ),
+      0
+    ) AS previous_value,
 
     COALESCE(
       (
@@ -89,6 +101,13 @@ for (const acc of accountsWithValues) {
   }
 }
 
+// Función para calcular diferencia y porcentaje
+function calculateDifference(currentValue: number, previousValue: number) {
+  const diff = currentValue - previousValue;
+  const percentChange = previousValue !== 0 ? ((diff / previousValue) * 100) : 0;
+  return { diff, percentChange };
+}
+
 const todayColombia = new Date().toLocaleDateString("es-CO", {
   timeZone: "America/Bogota",
   year: "numeric",
@@ -132,170 +151,200 @@ const todayColombia = new Date().toLocaleDateString("es-CO", {
 
     <!-- Lista de Cuentas -->
     <div class="space-y-4">
-      {accountsHierarchy.map((account) => (
-        <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-          <!-- Cuenta Principal -->
-          <div class="bg-gradient-to-r from-blue-50 to-blue-100 border-b border-blue-200 p-6">
-            <div class="flex items-center justify-between">
-              <div class="flex-1">
-                <h3 class="text-xl font-bold text-gray-900">{account.name}</h3>
-                <p class="text-sm text-gray-600 mt-1">
-                  {account.type} · {account.currency}
-                </p>
-              </div>
-              <div class="text-right">
-                <p class="text-2xl font-bold text-gray-900">
-                  {Number(account.current_value).toLocaleString('es-CO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                </p>
-                <p class="text-sm text-gray-600">{account.currency}</p>
-                {account.currency === 'USD' && (
-                  <p class="text-xs text-gray-500 mt-1">
-                    ≈ {(Number(account.current_value) * currentRate).toLocaleString('es-CO', { minimumFractionDigits: 0 })} COP
-                  </p>
-                )}
-              </div>
-            </div>
-            
-            <!-- Formulario de actualización -->
-            <form 
-              method="POST" 
-              action="/api/portfolio-values" 
-              class="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-3"
-            >
-              <input type="hidden" name="account_id" value={account.id} />
-              <input type="hidden" name="user_id" value={userId} />
-              <input type="hidden" name="currency" value={account.currency} />
-              <input type="hidden" name="previous_value" value={account.current_value} />
-              <input type="hidden" name="usd_to_cop_rate" value={currentRate} />
-              
-              <div>
-                <label class="block text-xs font-medium text-gray-700 mb-1">
-                  Nuevo Valor ({account.currency})
-                </label>
-                <input
-                  type="number"
-                  name="value"
-                  step="0.01"
-                  required
-                  placeholder={Number(account.current_value).toString()}
-                  class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
-                />
-              </div>
-              
-              <div>
-                <label class="block text-xs font-medium text-gray-700 mb-1">
-                  Fecha
-                </label>
-                <input
-                  type="date"
-                  name="date"
-                  value={todayColombia}
-                  required
-                  class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
-                />
-              </div>
-              
-              <div class="flex items-end">
-                <button
-                  type="submit"
-                  class="w-full px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors font-medium text-sm"
-                >
-                  Actualizar
-                </button>
-              </div>
-            </form>
-            
-            <p class="text-xs text-gray-500 mt-2">
-              Última actualización: {new Date(account.last_update).toLocaleDateString('es-CO', { dateStyle: 'medium' })}
-            </p>
-          </div>
-
-          <!-- Subcuentas -->
-          {account.subaccounts.length > 0 && (
-            <div class="divide-y divide-gray-200">
-              {account.subaccounts.map((sub: any) => (
-                <div class="p-4 hover:bg-gray-50 transition">
-                  <div class="flex items-center justify-between mb-3">
-                    <div class="flex-1">
-                      <h4 class="font-semibold text-gray-900 flex items-center gap-2">
-                        <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
-                        </svg>
-                        {sub.name}
-                      </h4>
-                      <p class="text-sm text-gray-600">{sub.type} · {sub.currency}</p>
-                    </div>
-                    <div class="text-right">
-                      <p class="text-lg font-bold text-gray-900">
-                        {Number(sub.current_value).toLocaleString('es-CO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                      </p>
-                      <p class="text-xs text-gray-600">{sub.currency}</p>
-                      {sub.currency === 'USD' && (
-                        <p class="text-xs text-gray-500">
-                          ≈ {(Number(sub.current_value) * currentRate).toLocaleString('es-CO', { minimumFractionDigits: 0 })} COP
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                  
-                  <!-- Formulario de actualización subcuenta -->
-                  <form 
-                    method="POST" 
-                    action="/api/portfolio-values" 
-                    class="grid grid-cols-1 sm:grid-cols-3 gap-3"
-                  >
-                    <input type="hidden" name="account_id" value={sub.id} />
-                    <input type="hidden" name="user_id" value={userId} />
-                    <input type="hidden" name="currency" value={sub.currency} />
-                    <input type="hidden" name="usd_to_cop_rate" value={currentRate} />
-                    <input type="hidden" name="previous_value" value={sub.current_value} />
-                    
-                    <div>
-                      <label class="block text-xs font-medium text-gray-700 mb-1">
-                        Nuevo Valor ({sub.currency})
-                      </label>
-                      <input
-                        type="number"
-                        name="value"
-                        step="0.01"
-                        required
-                        placeholder={Number(sub.current_value).toString()}
-                        class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
-                      />
-                    </div>
-                    
-                    <div>
-                      <label class="block text-xs font-medium text-gray-700 mb-1">
-                        Fecha
-                      </label>
-                      <input
-                        type="date"
-                        name="date"
-                        value={todayColombia}
-                        required
-                        class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
-                      />
-                    </div>
-                    
-                    <div class="flex items-end">
-                      <button
-                        type="submit"
-                        class="w-full px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 transition-colors font-medium text-sm"
-                      >
-                        Actualizar
-                      </button>
-                    </div>
-                  </form>
-                  
-                  <p class="text-xs text-gray-500 mt-2">
-                    Última actualización: {new Date(sub.last_update).toLocaleDateString('es-CO', { dateStyle: 'medium' })}
+      {accountsHierarchy.map((account) => {
+        const { diff, percentChange } = calculateDifference(
+          Number(account.current_value), 
+          Number(account.previous_value)
+        );
+        
+        return (
+          <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+            <!-- Cuenta Principal -->
+            <div class="bg-gradient-to-r from-blue-50 to-blue-100 border-b border-blue-200 p-6">
+              <div class="flex items-center justify-between">
+                <div class="flex-1">
+                  <h3 class="text-xl font-bold text-gray-900">{account.name}</h3>
+                  <p class="text-sm text-gray-600 mt-1">
+                    {account.type} · {account.currency}
                   </p>
                 </div>
-              ))}
+                <div class="text-right">
+                  <p class="text-2xl font-bold text-gray-900">
+                    {Number(account.current_value).toLocaleString('es-CO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </p>
+                  <p class="text-sm text-gray-600">{account.currency}</p>
+                  {account.currency === 'USD' && (
+                    <p class="text-xs text-gray-500 mt-1">
+                      ≈ {(Number(account.current_value) * currentRate).toLocaleString('es-CO', { minimumFractionDigits: 0 })} COP
+                    </p>
+                  )}
+                  
+                  {/* Mostrar diferencia respecto al valor anterior */}
+                  {diff !== 0 && (
+                    <div class={`text-xs font-semibold mt-2 ${diff > 0 ? 'text-green-600' : 'text-red-600'}`}>
+                      {diff > 0 ? '↑' : '↓'} {Math.abs(diff).toLocaleString('es-CO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {account.currency}
+                      <span class="ml-1">({percentChange > 0 ? '+' : ''}{percentChange.toFixed(2)}%)</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+              
+              <!-- Formulario de actualización -->
+              <form 
+                method="POST" 
+                action="/api/portfolio-values" 
+                class="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-3"
+              >
+                <input type="hidden" name="account_id" value={account.id} />
+                <input type="hidden" name="user_id" value={userId} />
+                <input type="hidden" name="currency" value={account.currency} />
+                <input type="hidden" name="previous_value" value={account.current_value} />
+                <input type="hidden" name="usd_to_cop_rate" value={currentRate} />
+                
+                <div>
+                  <label class="block text-xs font-medium text-gray-700 mb-1">
+                    Nuevo Valor ({account.currency})
+                  </label>
+                  <input
+                    type="number"
+                    name="value"
+                    step="0.01"
+                    required
+                    placeholder={Number(account.current_value).toString()}
+                    class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
+                  />
+                </div>
+                
+                <div>
+                  <label class="block text-xs font-medium text-gray-700 mb-1">
+                    Fecha
+                  </label>
+                  <input
+                    type="date"
+                    name="date"
+                    value={todayColombia}
+                    required
+                    class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
+                  />
+                </div>
+                
+                <div class="flex items-end">
+                  <button
+                    type="submit"
+                    class="w-full px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors font-medium text-sm"
+                  >
+                    Actualizar
+                  </button>
+                </div>
+              </form>
+              
+              <p class="text-xs text-gray-500 mt-2">
+                Última actualización: {new Date(account.last_update).toLocaleDateString('es-CO', { dateStyle: 'medium' })}
+              </p>
             </div>
-          )}
-        </div>
-      ))}
+
+            <!-- Subcuentas -->
+            {account.subaccounts.length > 0 && (
+              <div class="divide-y divide-gray-200">
+                {account.subaccounts.map((sub: any) => {
+                  const subDiff = calculateDifference(
+                    Number(sub.current_value), 
+                    Number(sub.previous_value)
+                  );
+                  
+                  return (
+                    <div class="p-4 hover:bg-gray-50 transition">
+                      <div class="flex items-center justify-between mb-3">
+                        <div class="flex-1">
+                          <h4 class="font-semibold text-gray-900 flex items-center gap-2">
+                            <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+                            </svg>
+                            {sub.name}
+                          </h4>
+                          <p class="text-sm text-gray-600">{sub.type} · {sub.currency}</p>
+                        </div>
+                        <div class="text-right">
+                          <p class="text-lg font-bold text-gray-900">
+                            {Number(sub.current_value).toLocaleString('es-CO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          </p>
+                          <p class="text-xs text-gray-600">{sub.currency}</p>
+                          {sub.currency === 'USD' && (
+                            <p class="text-xs text-gray-500">
+                              ≈ {(Number(sub.current_value) * currentRate).toLocaleString('es-CO', { minimumFractionDigits: 0 })} COP
+                            </p>
+                          )}
+                          
+                          {/* Mostrar diferencia respecto al valor anterior */}
+                          {subDiff.diff !== 0 && (
+                            <div class={`text-xs font-semibold mt-1 ${subDiff.diff > 0 ? 'text-green-600' : 'text-red-600'}`}>
+                              {subDiff.diff > 0 ? '↑' : '↓'} {Math.abs(subDiff.diff).toLocaleString('es-CO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {sub.currency}
+                              <span class="ml-1">({subDiff.percentChange > 0 ? '+' : ''}{subDiff.percentChange.toFixed(2)}%)</span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                      
+                      <!-- Formulario de actualización subcuenta -->
+                      <form 
+                        method="POST" 
+                        action="/api/portfolio-values" 
+                        class="grid grid-cols-1 sm:grid-cols-3 gap-3"
+                      >
+                        <input type="hidden" name="account_id" value={sub.id} />
+                        <input type="hidden" name="user_id" value={userId} />
+                        <input type="hidden" name="currency" value={sub.currency} />
+                        <input type="hidden" name="usd_to_cop_rate" value={currentRate} />
+                        <input type="hidden" name="previous_value" value={sub.current_value} />
+                        
+                        <div>
+                          <label class="block text-xs font-medium text-gray-700 mb-1">
+                            Nuevo Valor ({sub.currency})
+                          </label>
+                          <input
+                            type="number"
+                            name="value"
+                            step="0.01"
+                            required
+                            placeholder={Number(sub.current_value).toString()}
+                            class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
+                          />
+                        </div>
+                        
+                        <div>
+                          <label class="block text-xs font-medium text-gray-700 mb-1">
+                            Fecha
+                          </label>
+                          <input
+                            type="date"
+                            name="date"
+                            value={todayColombia}
+                            required
+                            class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
+                          />
+                        </div>
+                        
+                        <div class="flex items-end">
+                          <button
+                            type="submit"
+                            class="w-full px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 transition-colors font-medium text-sm"
+                          >
+                            Actualizar
+                          </button>
+                        </div>
+                      </form>
+                      
+                      <p class="text-xs text-gray-500 mt-2">
+                        Última actualización: {new Date(sub.last_update).toLocaleDateString('es-CO', { dateStyle: 'medium' })}
+                      </p>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        );
+      })}
     </div>
 
     <!-- Instrucciones -->
@@ -306,6 +355,7 @@ const todayColombia = new Date().toLocaleDateString("es-CO", {
         <li>• La fecha por defecto es hoy, pero puedes cambiarla si necesitas registrar un valor histórico</li>
         <li>• Los valores se guardan en el historial y se usan para calcular el rendimiento</li>
         <li>• Las subcuentas se actualizan independientemente de la cuenta principal</li>
+        <li>• Las flechas ↑↓ muestran el cambio desde la última actualización</li>
       </ul>
     </div>
   </div>

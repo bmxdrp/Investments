@@ -3,15 +3,32 @@ import { z } from "zod";
 import { sql, setRLSUser } from "@lib/db";
 import { randomUUID } from "node:crypto";
 import nodemailer from "nodemailer";
+import { applyRateLimit } from "@lib/ratelimit";
+import { validateCsrf } from "@lib/csrf-validator";
+import { handleApiError } from "@lib/error-handler";
 
 const forgotSchema = z.object({
   email: z.string().email(),
 });
 
-export const POST: APIRoute = async ({ request }) => {
+export const POST: APIRoute = async (context) => {
+  const { request } = context;
   try {
-    const form = Object.fromEntries(await request.formData());
+    // 🔒 Validar CSRF
+    const csrfResult = await validateCsrf(context, '/auth/forgot-password');
+    if (!csrfResult.success) {
+      return csrfResult.response!;
+    }
+
+    // 🔒 Rate limiting - 3 intentos cada 15 minutos
+    const rateLimitResult = await applyRateLimit(request, '/api/auth/forgot-password', 'email');
+    if (!rateLimitResult.success) {
+      return rateLimitResult.response!;
+    }
+
+    const form = Object.fromEntries(csrfResult.formData!);
     const parsed = forgotSchema.parse(form);
+
     // 1. Buscar usuario
     const user = await sql`
       SELECT id FROM users WHERE email = ${parsed.email} LIMIT 1
@@ -21,10 +38,9 @@ export const POST: APIRoute = async ({ request }) => {
       const userId = user[0].id;
       const token = randomUUID();
       const expiresAt = new Date(Date.now() + 1000 * 60 * 60); // 1 hora
-      setRLSUser(userId);
+      await setRLSUser(userId);
 
       // 2. Guardar token en DB (asumiendo tabla password_resets)
-      // Si la tabla no existe, esto fallará, pero crearemos la tabla después.
       await sql`
         INSERT INTO password_resets (user_id, token, expires_at)
         VALUES (${userId}, ${token}, ${expiresAt.toISOString()})
@@ -64,8 +80,14 @@ export const POST: APIRoute = async ({ request }) => {
     return Response.redirect(new URL("/auth/forgot-password?success=1", request.url), 303);
 
   } catch (error) {
-    console.error("Error en forgot-password:", error);
-    // En caso de error de sistema, sí mostramos error genérico
-    return Response.redirect(new URL("/auth/forgot-password?error=" + encodeURIComponent("Error al procesar la solicitud"), request.url), 303);
+    if (error instanceof z.ZodError) {
+      return Response.redirect(new URL("/auth/forgot-password?error=" + encodeURIComponent("Email inválido"), request.url), 303);
+    }
+
+    return handleApiError({
+      error,
+      logMsg: "Error en forgot-password",
+      type: new URL("/auth/forgot-password", request.url).toString()
+    });
   }
 };

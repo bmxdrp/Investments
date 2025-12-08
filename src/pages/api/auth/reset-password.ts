@@ -2,6 +2,8 @@ import type { APIRoute } from "astro";
 import { z } from "zod";
 import argon2 from "argon2";
 import { sql } from "@lib/db";
+import { validateCsrf } from "@lib/csrf-validator";
+import { handleApiError } from "@lib/error-handler";
 
 const resetSchema = z.object({
     token: z.string().min(1),
@@ -12,25 +14,34 @@ const resetSchema = z.object({
     path: ["password_confirm"],
 });
 
-export const POST: APIRoute = async ({ request }) => {
+export const POST: APIRoute = async (context) => {
+    const { request } = context;
     try {
-        const form = Object.fromEntries(await request.formData());
+        // 🔒 Validar CSRF
+        const csrfResult = await validateCsrf(context, '/auth/reset-password');
+        if (!csrfResult.success) {
+            return csrfResult.response!;
+        }
+
+        const formData = csrfResult.formData!;
+        const form = Object.fromEntries(formData);
 
         // Validación manual simple para redirigir con error legible
         if (form.password !== form.password_confirm) {
-            return Response.redirect(new URL(`/auth/reset-password?token=${form.token}&error=` + encodeURIComponent("Las contraseñas no coinciden"), request.url), 303);
+            const token = form.token as string;
+            return Response.redirect(new URL(`/auth/reset-password?token=${token}&error=` + encodeURIComponent("Las contraseñas no coinciden"), request.url), 303);
         }
 
         const parsed = resetSchema.parse(form);
 
         // 1. Buscar token válido
         const resets = await sql`
-      SELECT user_id, expires_at 
-      FROM password_resets 
-      WHERE token = ${parsed.token} 
-      AND used_at IS NULL
-      LIMIT 1
-    `;
+          SELECT user_id, expires_at 
+          FROM password_resets 
+          WHERE token = ${parsed.token} 
+          AND used_at IS NULL
+          LIMIT 1
+        `;
 
         if (resets.length === 0) {
             return Response.redirect(new URL("/auth/login?error=" + encodeURIComponent("Token inválido o expirado"), request.url), 303);
@@ -47,24 +58,30 @@ export const POST: APIRoute = async ({ request }) => {
         const passwordHash = await argon2.hash(parsed.password);
 
         await sql`
-      UPDATE users 
-      SET password_hash = ${passwordHash} 
-      WHERE id = ${reset.user_id}
-    `;
+          UPDATE users 
+          SET password_hash = ${passwordHash} 
+          WHERE id = ${reset.user_id}
+        `;
 
         // 3. Marcar token como usado
         await sql`
-      UPDATE password_resets 
-      SET used_at = NOW() 
-      WHERE token = ${parsed.token}
-    `;
+          UPDATE password_resets 
+          SET used_at = NOW() 
+          WHERE token = ${parsed.token}
+        `;
 
         // 4. Redirigir a login
         return Response.redirect(new URL("/auth/login?success=password_reset", request.url), 303);
 
     } catch (error) {
-        console.error("Error en reset-password:", error);
-        const token = (await request.formData()).get("token");
-        return Response.redirect(new URL(`/auth/reset-password?token=${token}&error=` + encodeURIComponent("Error al restablecer contraseña"), request.url), 303);
+        if (error instanceof z.ZodError) {
+            return Response.redirect(new URL("/auth/login?error=" + encodeURIComponent("Datos inválidos"), request.url), 303);
+        }
+
+        return handleApiError({
+            error,
+            logMsg: "Error en reset-password",
+            type: new URL("/auth/login", request.url).toString() // Redirigir a login en error grave
+        });
     }
 };

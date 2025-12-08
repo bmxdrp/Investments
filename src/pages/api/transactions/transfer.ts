@@ -1,16 +1,28 @@
 // src/pages/api/transactions/transfer.ts
 import type { APIRoute } from "astro";
-import { sql } from "@lib/db";
+import { sql, setRLSUser } from "@lib/db";
+import { validateCsrf } from "@lib/csrf-validator";
+import { handleApiError } from "@lib/error-handler";
 
-export const POST: APIRoute = async ({ request, locals }) => {
+export const POST: APIRoute = async (context) => {
+  const { request, locals } = context;
   try {
+    // 🔒 Validar CSRF
+    const csrfResult = await validateCsrf(context, '/dashboard/transfer');
+    if (!csrfResult.success) {
+      return csrfResult.response!;
+    }
+
     const userId = locals.userId;
     if (!userId) {
       return new Response("No autorizado", { status: 401 });
     }
 
+    // ✅ RLS
+    await setRLSUser(userId as string);
+
     // ✅ USAMOS FORMDATA (NO JSON)
-    const formData = await request.formData();
+    const formData = csrfResult.formData!;
 
     const from_account_id = Number(formData.get("from_account_id"));
     const to_account_id = Number(formData.get("to_account_id"));
@@ -22,12 +34,16 @@ export const POST: APIRoute = async ({ request, locals }) => {
     const usd_to_cop = Number(formData.get("usd_to_cop")) || 4000;
 
     if (!from_account_id || !to_account_id || amount <= 0) {
-      return new Response("Datos inválidos", { status: 400 });
+      return new Response(null, {
+        status: 302,
+        headers: { Location: "/dashboard/transfer?error=" + encodeURIComponent("Datos inválidos") }
+      });
     }
 
     if (from_account_id === to_account_id) {
-      return new Response("No puedes transferir a la misma cuenta", {
-        status: 400,
+      return new Response(null, {
+        status: 302,
+        headers: { Location: "/dashboard/transfer?error=" + encodeURIComponent("No puedes transferir a la misma cuenta") }
       });
     }
 
@@ -55,7 +71,10 @@ export const POST: APIRoute = async ({ request, locals }) => {
 
     if (!fromAccount || !toAccount) {
       await sql`ROLLBACK`;
-      return new Response("Cuenta no encontrada", { status: 404 });
+      return new Response(null, {
+        status: 302,
+        headers: { Location: "/dashboard/transfer?error=" + encodeURIComponent("Cuenta no encontrada") }
+      });
     }
 
     /* ================================
@@ -77,10 +96,14 @@ export const POST: APIRoute = async ({ request, locals }) => {
     ================================== */
     if (currentBalanceFrom < amount) {
       await sql`ROLLBACK`;
-      return new Response(
-        `Fondos insuficientes en ${fromAccount.name}. Disponible: ${currentBalanceFrom} ${fromAccount.currency}`,
-        { status: 400 }
-      );
+      return new Response(null, {
+        status: 302,
+        headers: {
+          Location: "/dashboard/transfer?error=" + encodeURIComponent(
+            `Fondos insuficientes en ${fromAccount.name}. Disponible: ${currentBalanceFrom} ${fromAccount.currency}`
+          )
+        }
+      });
     }
 
     /* ================================
@@ -242,8 +265,12 @@ export const POST: APIRoute = async ({ request, locals }) => {
     return new Response(null, { status: 302, headers: { Location: "/dashboard/transfer?success=1" } });
 
   } catch (error: any) {
-    console.error("Transfer Error:", error);
-    await sql`ROLLBACK`;
-    return new Response(error.message, { status: 302, headers: { Location: `/dashboard/transfer?error=${error.message}` } });
+    try { await sql`ROLLBACK`; } catch (e) { console.error('Error in rollback', e); }
+
+    return handleApiError({
+      error,
+      logMsg: "Transfer Critical Error",
+      type: "/dashboard/transfer"
+    });
   }
 };

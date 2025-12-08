@@ -1,6 +1,8 @@
 ---
 import Layout from "@layouts/default.astro";
 import { sql } from "@lib/db";
+import { getCategories } from "@lib/categories";
+import CsrfField from "@components/CsrfField.astro";
 
 const userId = Astro.locals.userId;
 
@@ -21,43 +23,46 @@ const accounts = await sql`
   ORDER BY name ASC;
 `;
 
-// Fecha actual por defecto (hora de Colombia)
+// Obtener categorías de tipo 'income' (aportes)
+const categories = await getCategories("income");
+
+// Fecha actual por defecto
 const today = new Date().toLocaleDateString("en-CA", {
   timeZone: "America/Bogota",
 });
 ---
 
 <Layout title="Agregar Inversión" activePage="contribute">
-  <div class="max-w-2xl mx-auto space-y-4 sm:space-y-6">
+  <div class="max-w-2xl mx-auto space-y-6">
     <!-- Header -->
-    <div class="mb-6 sm:mb-8">
-      <h1 class="text-2xl sm:text-3xl font-bold text-gray-900">
-        Agregar Inversión
+    <div class="mb-8">
+      <h1 class="text-3xl font-bold text-gray-900 tracking-tight">
+        Registrar Aporte
       </h1>
-      <p class="mt-2 text-sm sm:text-base text-gray-600">
-        Registra un nuevo aporte a tu portafolio
-      </p>
+      <p class="mt-2 text-gray-500">Controla el crecimiento de tu capital</p>
     </div>
 
     <!-- Mensajes de éxito/error -->
     {
       contributionSuccess === "1" && (
-        <div class="mb-4 sm:mb-6 bg-green-50 border border-green-200 rounded-lg p-3 sm:p-4">
-          <div class="flex">
-            <svg
-              class="h-5 w-5 text-green-400 flex-shrink-0"
-              fill="currentColor"
-              viewBox="0 0 20 20"
-            >
-              <path
-                fill-rule="evenodd"
-                d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
-                clip-rule="evenodd"
-              />
-            </svg>
+        <div class="mb-6 bg-emerald-50 border border-emerald-100 rounded-xl p-4 animate-fade-in-down">
+          <div class="flex items-center">
+            <div class="flex-shrink-0 bg-emerald-100 rounded-full p-1.5">
+              <svg
+                class="h-5 w-5 text-emerald-600"
+                fill="currentColor"
+                viewBox="0 0 20 20"
+              >
+                <path
+                  fill-rule="evenodd"
+                  d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+                  clip-rule="evenodd"
+                />
+              </svg>
+            </div>
             <div class="ml-3">
-              <p class="text-sm font-medium text-green-800">
-                ¡Inversión registrada exitosamente!
+              <p class="text-sm font-semibold text-emerald-800">
+                ¡Aporte registrado correctamente!
               </p>
             </div>
           </div>
@@ -67,25 +72,27 @@ const today = new Date().toLocaleDateString("en-CA", {
 
     {
       contributionSuccess === "0" && (
-        <div class="mb-4 sm:mb-6 bg-red-50 border border-red-200 rounded-lg p-3 sm:p-4">
-          <div class="flex">
-            <svg
-              class="h-5 w-5 text-red-400 flex-shrink-0"
-              fill="currentColor"
-              viewBox="0 0 20 20"
-            >
-              <path
-                fill-rule="evenodd"
-                d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z"
-                clip-rule="evenodd"
-              />
-            </svg>
+        <div class="mb-6 bg-red-50 border border-red-100 rounded-xl p-4">
+          <div class="flex items-center">
+            <div class="flex-shrink-0 bg-red-100 rounded-full p-1.5">
+              <svg
+                class="h-5 w-5 text-red-600"
+                fill="currentColor"
+                viewBox="0 0 20 20"
+              >
+                <path
+                  fill-rule="evenodd"
+                  d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z"
+                  clip-rule="evenodd"
+                />
+              </svg>
+            </div>
             <div class="ml-3">
               <p class="text-sm font-medium text-red-800">
-                Error al registrar la inversión
+                No se pudo registrar
               </p>
               {error && (
-                <p class="mt-1 text-sm text-red-700">
+                <p class="text-xs text-red-600 mt-1">
                   {decodeURIComponent(error)}
                 </p>
               )}
@@ -96,172 +103,206 @@ const today = new Date().toLocaleDateString("en-CA", {
     }
 
     <!-- Formulario de inversión -->
-    <div class="bg-white shadow-sm rounded-lg border border-gray-200">
+    <div
+      class="bg-white shadow-sm rounded-2xl border border-gray-100 overflow-hidden"
+    >
       <form
         method="POST"
         action="/api/transactions/contribute"
-        class="p-4 sm:p-6 space-y-4 sm:space-y-6"
+        class="p-6 md:p-8 space-y-6"
       >
-        <!-- Cuenta -->
-        <div>
-          <label
-            for="account_id"
-            class="block text-sm font-medium text-gray-700 mb-2"
-          >
-            Cuenta <span class="text-red-500">*</span>
-          </label>
-          <select
-            id="account_id"
-            name="account_id"
-            required
-            class="w-full px-3 sm:px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition text-sm sm:text-base"
-          >
-            <option value="">Selecciona una cuenta</option>
-            {
-              accounts.map((account) => (
-                <option value={account.id}>
-                  {account.name} ({account.currency})
-                </option>
-              ))
-            }
-          </select>
-        </div>
+        <CsrfField />
 
-        <!-- Fecha -->
-        <div>
-          <label
-            for="date"
-            class="block text-sm font-medium text-gray-700 mb-2"
-          >
-            Fecha <span class="text-red-500">*</span>
-          </label>
-          <input
-            type="date"
-            id="date"
-            name="date"
-            value={today}
-            required
-            class="w-full px-3 sm:px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition text-sm sm:text-base"
-          />
-        </div>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <!-- Cuenta -->
+          <div class="col-span-1 md:col-span-2">
+            <label
+              for="account_id"
+              class="block text-sm font-medium text-gray-700 mb-2"
+              >Destino</label
+            >
+            <div class="relative">
+              <select
+                id="account_id"
+                name="account_id"
+                required
+                class="appearance-none w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition text-gray-900 font-medium"
+              >
+                <option value="">Selecciona una cuenta...</option>
+                {
+                  accounts.map((account) => (
+                    <option value={account.id}>
+                      {account.name} · {account.currency}
+                    </option>
+                  ))
+                }
+              </select>
+              <div
+                class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-gray-500"
+              >
+                <svg
+                  class="h-4 w-4"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                  ><path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    d="M19 9l-7 7-7-7"></path></svg
+                >
+              </div>
+            </div>
+          </div>
 
-        <!-- Monto -->
-        <div>
-          <label
-            for="amount"
-            class="block text-sm font-medium text-gray-700 mb-2"
-          >
-            Monto <span class="text-red-500">*</span>
-          </label>
-          <div class="relative">
-            <span
-              class="absolute left-3 sm:left-4 top-2.5 text-gray-500 text-sm sm:text-base"
-              >$</span
+          <!-- Categoría -->
+          <div class="col-span-1 md:col-span-2">
+            <label class="block text-sm font-medium text-gray-700 mb-3"
+              >Categoría</label
+            >
+            <div class="grid grid-cols-2 sm:grid-cols-3 gap-3">
+              {
+                categories.map((cat) => (
+                  <label class="cursor-pointer">
+                    <input
+                      type="radio"
+                      name="category_id"
+                      value={cat.id}
+                      class="peer sr-only"
+                      required
+                    />
+                    <div class="flex items-center gap-3 p-3 rounded-xl border border-gray-200 bg-white hover:bg-gray-50 peer-checked:border-blue-500 peer-checked:ring-1 peer-checked:ring-blue-500 peer-checked:bg-blue-50/50 transition-all">
+                      <span class="text-xl">{cat.icon}</span>
+                      <span class="text-sm font-medium text-gray-700">
+                        {cat.name}
+                      </span>
+                    </div>
+                  </label>
+                ))
+              }
+            </div>
+          </div>
+
+          <!-- Monto -->
+          <div>
+            <label
+              for="amount"
+              class="block text-sm font-medium text-gray-700 mb-2">Monto</label
+            >
+            <div class="relative">
+              <span class="absolute left-4 top-3.5 text-gray-400">$</span>
+              <input
+                type="number"
+                id="amount"
+                name="amount"
+                step="0.01"
+                min="0.01"
+                placeholder="0.00"
+                required
+                class="w-full pl-8 pr-4 py-3 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition text-lg font-bold text-gray-900 placeholder:text-gray-300"
+              />
+            </div>
+          </div>
+
+          <!-- Moneda -->
+          <div>
+            <label
+              for="currency"
+              class="block text-sm font-medium text-gray-700 mb-2">Moneda</label
+            >
+            <div class="relative">
+              <select
+                id="currency"
+                name="currency"
+                required
+                class="appearance-none w-full px-4 py-3 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition text-gray-900 font-medium"
+              >
+                <option value="COP">COP (Peso)</option>
+                <option value="USD">USD (Dólar)</option>
+              </select>
+              <div
+                class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-gray-500"
+              >
+                <svg
+                  class="h-4 w-4"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                  ><path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    d="M19 9l-7 7-7-7"></path></svg
+                >
+              </div>
+            </div>
+          </div>
+
+          <!-- Fecha -->
+          <div class="col-span-1 md:col-span-2">
+            <label
+              for="date"
+              class="block text-sm font-medium text-gray-700 mb-2">Fecha</label
             >
             <input
-              type="number"
-              id="amount"
-              name="amount"
-              step="0.01"
-              min="0.01"
-              placeholder="0.00"
+              type="date"
+              id="date"
+              name="date"
+              value={today}
               required
-              class="w-full pl-7 sm:pl-8 pr-3 sm:pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition text-sm sm:text-base"
+              class="w-full px-4 py-3 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition text-gray-900 font-medium"
             />
           </div>
-          <p class="mt-1 text-xs text-gray-500">
-            Ingresa el monto de tu inversión
-          </p>
-        </div>
 
-        <!-- Moneda -->
-        <div>
-          <label
-            for="currency"
-            class="block text-sm font-medium text-gray-700 mb-2"
-          >
-            Moneda <span class="text-red-500">*</span>
-          </label>
-          <select
-            id="currency"
-            name="currency"
-            required
-            class="w-full px-3 sm:px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition text-sm sm:text-base"
-          >
-            <option value="COP">COP - Peso Colombiano</option>
-            <option value="USD">USD - Dólar Estadounidense</option>
-          </select>
-        </div>
-
-        <!-- Nota -->
-        <div>
-          <label
-            for="note"
-            class="block text-sm font-medium text-gray-700 mb-2"
-          >
-            Nota (opcional)
-          </label>
-          <textarea
-            id="note"
-            name="note"
-            rows="3"
-            value="pruebass"
-            placeholder="Ej: Aporte mensual, inversión inicial, etc."
-            class="w-full px-3 sm:px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition resize-none text-sm sm:text-base"
-          ></textarea>
-        </div>
-
-        <!-- Info Box -->
-        <div class="bg-blue-50 border border-blue-200 rounded-lg p-3 sm:p-4">
-          <div class="flex">
-            <svg
-              class="h-5 w-5 text-blue-400 shrink-0"
-              fill="currentColor"
-              viewBox="0 0 20 20"
+          <!-- Nota -->
+          <div class="col-span-1 md:col-span-2">
+            <label
+              for="note"
+              class="block text-sm font-medium text-gray-700 mb-2"
+              >Nota (Opcional)</label
             >
-              <path
-                fill-rule="evenodd"
-                d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z"
-                clip-rule="evenodd"></path>
-            </svg>
-            <div class="ml-3">
-              <p class="text-xs sm:text-sm text-blue-800">
-                El valor del portafolio se actualizará automáticamente al
-                registrar este aporte.
-              </p>
-            </div>
+            <textarea
+              id="note"
+              name="note"
+              rows="2"
+              placeholder="Detalles de la transacción..."
+              class="w-full px-4 py-3 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition text-gray-900 font-medium resize-none placeholder:text-gray-300"
+            ></textarea>
           </div>
         </div>
 
         <!-- Botones -->
-        <div class="flex flex-col sm:flex-row gap-3 sm:gap-4 pt-2 sm:pt-4">
-          <button
-            type="submit"
-            class="w-full sm:flex-1 bg-blue-600 text-white px-6 py-2.5 sm:py-3 rounded-lg font-medium hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition text-sm sm:text-base"
-          >
-            Guardar Inversión
-          </button>
+        <div class="flex items-center gap-4 pt-4">
           <a
             href="/dashboard"
-            class="w-full sm:flex-1 bg-gray-100 text-gray-700 px-6 py-2.5 sm:py-3 rounded-lg font-medium hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 transition text-center text-sm sm:text-base"
+            class="flex-1 text-center text-gray-600 px-6 py-3 rounded-xl font-medium hover:bg-gray-50 hover:text-gray-900 transition"
           >
             Cancelar
           </a>
+          <button
+            type="submit"
+            class="flex-[2] bg-blue-600 text-white px-6 py-3 rounded-xl font-bold shadow-lg shadow-blue-600/20 hover:bg-blue-700 hover:shadow-blue-600/30 transition-all transform hover:-translate-y-0.5 active:translate-y-0"
+          >
+            Confirmar Aporte
+          </button>
         </div>
       </form>
     </div>
-
-    <!-- Información adicional -->
-    <div class="bg-green-50 border border-green-200 rounded-lg p-3 sm:p-4">
-      <h3 class="text-sm font-medium text-green-900 mb-2">
-        💡 Consejos para registrar inversiones
-      </h3>
-      <ul class="text-xs sm:text-sm text-green-800 space-y-1">
-        <li>• Registra tus aportes tan pronto como los hagas</li>
-        <li>• La moneda debe coincidir con la de tu cuenta</li>
-        <li>• Usa notas descriptivas para facilitar el seguimiento</li>
-        <li>• Verifica el monto antes de guardar</li>
-      </ul>
-    </div>
   </div>
 </Layout>
+
+<style>
+  @keyframes fadeInDown {
+    from {
+      opacity: 0;
+      transform: translateY(-10px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+  .animate-fade-in-down {
+    animation: fadeInDown 0.4s ease-out;
+  }
+</style>

@@ -1,17 +1,19 @@
 ---
 import Layout from "@layouts/default.astro";
 import { sql, asRows } from "@lib/db";
+import FinanceChart from "@components/FinanceChart.astro";
 
 const userId = Astro.locals.userId;
 if (!userId) return Astro.redirect("/auth/login?returnTo=/dashboard/charts");
 
+// 1. Configuración y Datos Base
 // Latest FX
 const rateRows = asRows<{ usd_to_cop: number }>(
   await sql`SELECT usd_to_cop FROM exchange_rates ORDER BY date DESC LIMIT 1;`,
 );
 const usdToCop = Number(rateRows[0]?.usd_to_cop ?? 0);
 
-// Totals: contributions, withdrawals (converted to COP using transaction's usd_to_cop_rate if available)
+// Totals: contributions, withdrawals
 const totalContribRows = await sql`
   SELECT COALESCE(SUM(CASE 
     WHEN t.currency='USD' THEN t.amount * COALESCE(t.usd_to_cop_rate, ${usdToCop}) 
@@ -35,7 +37,7 @@ const totalWithdrawRows = await sql`
 const totalContributed = Number(totalContribRows[0].total);
 const totalWithdrawn = Number(totalWithdrawRows[0].total);
 
-// Latest portfolio total (sum of new_value from latest transactions per account converted to COP)
+// Latest portfolio total
 const portfolioRows = await sql`
   SELECT DISTINCT ON (t.account_id) 
     t.account_id, 
@@ -61,36 +63,60 @@ for (const r of portfolioRows) {
 const netReturn = totalPortfolioCOP - (totalContributed - totalWithdrawn);
 const roi = totalContributed > 0 ? (netReturn / totalContributed) * 100 : 0;
 
-// Monthly contributions & withdrawals (last 12 months)
-const monthlyContrib = await sql`
-  SELECT to_char(date_trunc('month', t.date), 'YYYY-MM') AS month, 
+// 2. Preparación de Datos para Gráficos
+
+// A. Historial Diario (Line Chart)
+const dailyRows = await sql`
+  SELECT t.date, 
     SUM(CASE 
-      WHEN t.currency='USD' THEN t.amount * COALESCE(t.usd_to_cop_rate, ${usdToCop}) 
-      ELSE t.amount 
+      WHEN a.currency='USD' THEN COALESCE(t.new_value, 0) * COALESCE(t.usd_to_cop_rate, ${usdToCop}) 
+      ELSE COALESCE(t.new_value, 0) 
     END) AS total
   FROM transactions t
-  WHERE t.type = 'contribution'
-  AND (t.user_id = ${userId} OR t.account_id IN (SELECT id FROM accounts WHERE user_id = ${userId}))
-  GROUP BY month
-  ORDER BY month DESC
-  LIMIT 12;
+  JOIN accounts a ON a.id = t.account_id
+  WHERE a.user_id = ${userId}
+  AND t.new_value IS NOT NULL
+  GROUP BY t.date
+  ORDER BY t.date ASC;
 `;
 
-const monthlyWithdraw = await sql`
-  SELECT to_char(date_trunc('month', t.date), 'YYYY-MM') AS month, 
-    SUM(CASE 
-      WHEN t.currency='USD' THEN t.amount * COALESCE(t.usd_to_cop_rate, ${usdToCop}) 
-      ELSE t.amount 
-    END) AS total
-  FROM transactions t
-  WHERE t.type = 'withdrawal'
-  AND (t.user_id = ${userId} OR t.account_id IN (SELECT id FROM accounts WHERE user_id = ${userId}))
-  GROUP BY month
-  ORDER BY month DESC
-  LIMIT 12;
-`;
+const dailyLabels = dailyRows.map((r: any) =>
+  new Date(r.date).toLocaleDateString("es-CO", {
+    day: "numeric",
+    month: "short",
+  }),
+);
+const dailyData = dailyRows.map((r: any) => Number(r.total));
+const historyChartData = {
+  labels: dailyLabels,
+  datasets: [
+    {
+      label: "Valor Portafolio (COP)",
+      data: dailyData,
+      borderColor: "#3b82f6",
+      backgroundColor: "rgba(59, 130, 246, 0.1)",
+      fill: true,
+      tension: 0.3,
+      pointRadius: 2,
+    },
+  ],
+};
 
-// Distribution by currency (using new_value from latest transactions)
+// Volatility Calculation
+const dailyTotals = dailyData;
+function stddev(arr: number[]) {
+  if (arr.length <= 1) return 0;
+  const mean = arr.reduce((s, v) => s + v, 0) / arr.length;
+  const variance =
+    arr.reduce((s, v) => s + Math.pow(v - mean, 2), 0) / (arr.length - 1);
+  return Math.sqrt(variance);
+}
+const returnsPct = dailyTotals.map((v, i) =>
+  i === 0 ? 0 : ((v - dailyTotals[i - 1]) / dailyTotals[i - 1]) * 100,
+);
+const volatility = stddev(returnsPct);
+
+// B. Distribución por Moneda (Doughnut Chart)
 const distRows = await sql`
   SELECT a.currency, 
     SUM(COALESCE(latest.new_value, 0)) AS total,
@@ -108,245 +134,270 @@ const distRows = await sql`
   GROUP BY a.currency, latest.rate;
 `;
 
-const distribution = distRows.map((d: any) => ({
-  currency: d.currency,
-  total_cop:
-    d.currency === "USD" ? Number(d.total) * Number(d.rate) : Number(d.total),
-}));
+const distLabels = distRows.map((d: any) => d.currency);
+const distDataValues = distRows.map((d: any) =>
+  d.currency === "USD" ? Number(d.total) * Number(d.rate) : Number(d.total),
+);
 
-// Volatility (stddev of daily returns using new_value from transactions)
-const dailyRows = await sql`
-  SELECT t.date, 
+const allocationChartData = {
+  labels: distLabels,
+  datasets: [
+    {
+      label: "Valor en COP",
+      data: distDataValues,
+      backgroundColor: distLabels.map((l) =>
+        l === "USD" ? "#10b981" : "#3b82f6",
+      ),
+      borderWidth: 0,
+      hoverOffset: 4,
+    },
+  ],
+};
+
+// C. Mensual: Aportes vs Retiros (Bar Chart Stacked or Grouped)
+const monthlyContrib = await sql`
+  SELECT to_char(date_trunc('month', t.date), 'YYYY-MM') AS month, 
     SUM(CASE 
-      WHEN a.currency='USD' THEN COALESCE(t.new_value, 0) * COALESCE(t.usd_to_cop_rate, ${usdToCop}) 
-      ELSE COALESCE(t.new_value, 0) 
+      WHEN t.currency='USD' THEN t.amount * COALESCE(t.usd_to_cop_rate, ${usdToCop}) 
+      ELSE t.amount 
     END) AS total
   FROM transactions t
-  JOIN accounts a ON a.id = t.account_id
-  WHERE a.user_id = ${userId}
-  AND t.new_value IS NOT NULL
-  GROUP BY t.date
-  ORDER BY t.date ASC;
+  WHERE t.type = 'contribution'
+  AND (t.user_id = ${userId} OR t.account_id IN (SELECT id FROM accounts WHERE user_id = ${userId}))
+  GROUP BY month
+  ORDER BY month ASC
+  LIMIT 12;
 `;
 
-const dailyTotals = dailyRows.map((r: any) => Number(r.total));
-function stddev(arr: number[]) {
-  if (arr.length <= 1) return 0;
-  const mean = arr.reduce((s, v) => s + v, 0) / arr.length;
-  const variance =
-    arr.reduce((s, v) => s + Math.pow(v - mean, 2), 0) / (arr.length - 1);
-  return Math.sqrt(variance);
-}
+const monthlyWithdraw = await sql`
+  SELECT to_char(date_trunc('month', t.date), 'YYYY-MM') AS month, 
+    SUM(CASE 
+      WHEN t.currency='USD' THEN t.amount * COALESCE(t.usd_to_cop_rate, ${usdToCop}) 
+      ELSE t.amount 
+    END) AS total
+  FROM transactions t
+  WHERE t.type = 'withdrawal'
+  AND (t.user_id = ${userId} OR t.account_id IN (SELECT id FROM accounts WHERE user_id = ${userId}))
+  GROUP BY month
+  ORDER BY month ASC
+  LIMIT 12;
+`;
 
-const returnsPct = dailyTotals.map((v, i) =>
-  i === 0 ? 0 : ((v - dailyTotals[i - 1]) / dailyTotals[i - 1]) * 100,
+// Merge monthly data
+const monthMap = new Map();
+monthlyContrib.forEach((r: any) =>
+  monthMap.set(r.month, { contrib: Number(r.total), withdraw: 0 }),
 );
-const volatility = stddev(returnsPct);
+monthlyWithdraw.forEach((r: any) => {
+  const entry = monthMap.get(r.month) || { contrib: 0, withdraw: 0 };
+  entry.withdraw = Number(r.total);
+  monthMap.set(r.month, entry);
+});
 
-// Top/Bottom months
-const monthlyNet = {} as Record<string, number>;
-for (const row of monthlyContrib) {
-  monthlyNet[row.month] = (monthlyNet[row.month] || 0) + Number(row.total);
-}
-for (const row of monthlyWithdraw) {
-  monthlyNet[row.month] = (monthlyNet[row.month] || 0) - Number(row.total);
-}
-const monthEntries = Object.entries(monthlyNet).sort(
-  (a, b) => Number(b[1]) - Number(a[1]),
-);
-const bestMonth = monthEntries[0] ?? null;
-const worstMonth = monthEntries[monthEntries.length - 1] ?? null;
+// Sort months
+const sortedMonths = Array.from(monthMap.keys()).sort();
+const barLabels = sortedMonths;
+const dataContrib = sortedMonths.map((m) => monthMap.get(m).contrib);
+const dataWithdraw = sortedMonths.map((m) => monthMap.get(m).withdraw);
+
+const flowChartData = {
+  labels: barLabels,
+  datasets: [
+    {
+      label: "Aportes",
+      data: dataContrib,
+      backgroundColor: "#10b981",
+      borderRadius: 4,
+    },
+    {
+      label: "Retiros",
+      data: dataWithdraw,
+      backgroundColor: "#ef4444",
+      borderRadius: 4,
+    },
+  ],
+};
+
+// Top/Bottom Month Calculation (Same as before but using the map)
+let bestMonthV = { month: "", value: 0 };
+let worstMonthV = { month: "", value: 0 };
+monthMap.forEach((val, key) => {
+  const net = val.contrib - val.withdraw;
+  if (net > bestMonthV.value) bestMonthV = { month: key, value: net };
+  if (net < worstMonthV.value) worstMonthV = { month: key, value: net };
+});
+const bestMonth = bestMonthV.month
+  ? [bestMonthV.month, bestMonthV.value]
+  : null;
+const worstMonth = worstMonthV.month
+  ? [worstMonthV.month, worstMonthV.value]
+  : null;
 ---
 
 <Layout title="Dashboard - Gráficos" activePage="dashboard">
-      <div class="max-w-7xl mx-auto space-y-6">
-        <div class="flex items-center justify-between">
-          <div>
-            <h1 class="text-3xl font-bold text-gray-900">
-              Dashboard de Inversiones
-            </h1>
-            <p class="text-gray-600 mt-1">
-              Visión general y estadísticas clave
-            </p>
-          </div>
-          <div class="text-right">
-            <p class="text-sm text-gray-500">
-              Tipo de cambio USD/COP: <span class="font-mono font-semibold"
-                >{usdToCop.toFixed(2)}</span
-              >
-            </p>
-          </div>
-        </div>
+  <div class="max-w-7xl mx-auto space-y-8">
+    <div class="flex items-center justify-between">
+      <div>
+        <h1 class="text-3xl font-bold text-gray-900 tracking-tight">
+          Análisis de Portafolio
+        </h1>
+        <p class="text-gray-500 mt-1">
+          Visualización interactiva de tu rendimiento financiero
+        </p>
+      </div>
+      <div
+        class="text-right bg-gray-50 px-4 py-2 rounded-lg border border-gray-100"
+      >
+        <p
+          class="text-xs text-gray-400 uppercase tracking-widest font-semibold"
+        >
+          Tasa USD/COP
+        </p>
+        <p class="text-lg font-mono font-bold text-gray-700">
+          ${usdToCop.toLocaleString()}
+        </p>
+      </div>
+    </div>
 
-        <!-- Indicators -->
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-            <p class="text-sm text-gray-600">Valor total del portafolio</p>
-            <p class="text-2xl font-bold mt-2">
-              {
-                totalPortfolioCOP.toLocaleString("es-CO", {
-                  style: "currency",
-                  currency: "COP",
-                  minimumFractionDigits: 0,
-                })
-              }
-            </p>
-          </div>
+    <!-- KPIs Principales -->
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
+      <div
+        class="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 flex flex-col justify-between hover:shadow-md transition-shadow"
+      >
+        <p class="text-sm font-medium text-gray-500">Valor Total Portafolio</p>
+        <p class="text-3xl font-bold text-gray-900 mt-2">
+          {
+            totalPortfolioCOP.toLocaleString("es-CO", {
+              style: "currency",
+              currency: "COP",
+              minimumFractionDigits: 0,
+            })
+          }
+        </p>
+      </div>
 
-          <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-            <p class="text-sm text-gray-600">Total invertido</p>
-            <p class="text-2xl font-bold mt-2">
-              {
-                totalContributed.toLocaleString("es-CO", {
-                  style: "currency",
-                  currency: "COP",
-                  minimumFractionDigits: 0,
-                })
-              }
-            </p>
-          </div>
-
-          <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-            <p class="text-sm text-gray-600">Total retirado</p>
-            <p class="text-2xl font-bold mt-2">
-              {
-                totalWithdrawn.toLocaleString("es-CO", {
-                  style: "currency",
-                  currency: "COP",
-                  minimumFractionDigits: 0,
-                })
-              }
-            </p>
-          </div>
-        </div>
-
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-            <p class="text-sm text-gray-600">Retorno neto</p>
-            <p class="text-2xl font-bold mt-2">
-              {
-                netReturn.toLocaleString("es-CO", {
-                  style: "currency",
-                  currency: "COP",
-                  minimumFractionDigits: 0,
-                })
-              }
-            </p>
-            <p class="text-xs text-gray-500 mt-1">ROI {roi.toFixed(2)}%</p>
-          </div>
-
-          <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-            <p class="text-sm text-gray-600">Volatilidad (desv. %)</p>
-            <p class="text-2xl font-bold mt-2">{volatility.toFixed(2)}</p>
-            <p class="text-xs text-gray-500 mt-1">
-              Std dev of daily returns (%)
-            </p>
-          </div>
-
-          <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-            <p class="text-sm text-gray-600">Mejor mes (neto)</p>
-            <p class="text-2xl font-bold mt-2">
-              {
-                bestMonth
-                  ? `${bestMonth[0]} · ${Number(bestMonth[1]).toLocaleString("es-CO")}`
-                  : "—"
-              }
-            </p>
-            <p class="text-xs text-gray-500 mt-1">
-              Peor: {
-                worstMonth
-                  ? `${worstMonth[0]} · ${Number(worstMonth[1]).toLocaleString("es-CO")}`
-                  : "—"
-              }
-            </p>
-          </div>
-        </div>
-
-        <!-- Charts grid (3 columns) -->
-        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
-            <h3 class="text-lg font-bold mb-3">Valor del portafolio</h3>
-            <img
-              src={`/api/graphics?type=historial_valores`}
-              alt="Valor del portafolio"
-            />
-          </div>
-
-          <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
-            <h3 class="text-lg font-bold mb-3">Rentabilidad acumulada</h3>
-            <img
-              src={`/api/graphics?type=rentabilidad_acumulada`}
-              alt="Rentabilidad acumulada"
-            />
-          </div>
-
-          <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
-            <h3 class="text-lg font-bold mb-3">Rendimiento % diario</h3>
-            <img
-              src={`/api/graphics?type=rendimiento_porcentual`}
-              alt="Rendimiento % diario"
-            />
-          </div>
-
-          <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
-            <h3 class="text-lg font-bold mb-3">Aportes vs Retiros</h3>
-            <img
-              src={`/api/graphics?type=ingresos_vs_egresos`}
-              alt="Ingresos vs egresos"
-            />
-          </div>
-
-          <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
-            <h3 class="text-lg font-bold mb-3">Distribución por moneda</h3>
-            <img
-              src={`/api/graphics?type=diversificacion`}
-              alt="Distribución por moneda"
-            />
-          </div>
-
-          <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
-            <h3 class="text-lg font-bold mb-3">Comparativa COP / USD</h3>
-            <img
-              src={`/api/graphics?type=comparativa_cop_usd`}
-              alt="Comparativa COP USD"
-            />
-          </div>
-
-          <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
-            <h3 class="text-lg font-bold mb-3">Evolución por tipo</h3>
-            <img
-              src={`/api/graphics?type=evolucion_por_tipo`}
-              alt="Evolución por tipo"
-            />
-          </div>
-
-          <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
-            <h3 class="text-lg font-bold mb-3">Historial Aportes</h3>
-            <img
-              src={`/api/graphics?type=historial_aportes`}
-              alt="Historial aportes"
-            />
-          </div>
-
-          <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
-            <h3 class="text-lg font-bold mb-3">Rentabilidad acumulada</h3>
-            <img
-              src={`/api/graphics?type=rentabilidad_acumulada`}
-              alt="Rentabilidad acumulada"
-            />
-          </div>
-        </div>
-
-        <!-- Footer / actions -->
-        <div class="flex items-center justify-end gap-3">
-          <a
-            class="inline-block bg-blue-600 text-white px-4 py-2 rounded"
-            href="#">Exportar CSV</a
+      <div
+        class="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 flex flex-col justify-between hover:shadow-md transition-shadow"
+      >
+        <p class="text-sm font-medium text-gray-500">Retorno Neto</p>
+        <div class="mt-2">
+          <p
+            class={`text-3xl font-bold ${netReturn >= 0 ? "text-green-600" : "text-red-600"}`}
           >
-          <a
-            class="inline-block bg-gray-200 text-gray-800 px-4 py-2 rounded"
-            href="/dashboard">Volver</a
-          >
+            {netReturn >= 0 ? "+" : ""}{
+              netReturn.toLocaleString("es-CO", {
+                style: "currency",
+                currency: "COP",
+                minimumFractionDigits: 0,
+              })
+            }
+          </p>
+          <p class="text-xs text-gray-400 mt-1">ROI: {roi.toFixed(2)}%</p>
         </div>
       </div>
+
+      <div
+        class="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 flex flex-col justify-between hover:shadow-md transition-shadow"
+      >
+        <p class="text-sm font-medium text-gray-500">Volatilidad (Riesgo)</p>
+        <div class="mt-2">
+          <p class="text-3xl font-bold text-gray-900">
+            {volatility.toFixed(2)}%
+          </p>
+          <p class="text-xs text-gray-400 mt-1">Desviación diaria</p>
+        </div>
+      </div>
+
+      <div
+        class="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 flex flex-col justify-between hover:shadow-md transition-shadow"
+      >
+        <p class="text-sm font-medium text-gray-500">Mejor Mes (Flujo)</p>
+        <div class="mt-2">
+          <p class="text-xl font-bold text-gray-900">
+            {bestMonth ? bestMonth[0] : "N/A"}
+          </p>
+          <p class="text-sm text-green-600 font-medium">
+            {
+              bestMonth
+                ? `+${Number(bestMonth[1]).toLocaleString("es-CO", { style: "currency", currency: "COP", minimumFractionDigits: 0 })}`
+                : "-"
+            }
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Gráficos Interactivos -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+      <!-- Historial Grande (2 columnas) -->
+      <div class="lg:col-span-2 space-y-2">
+        <h3 class="text-lg font-bold text-gray-800 ml-1">
+          Evolución del Patrimonio
+        </h3>
+        <FinanceChart
+          id="historyChart"
+          type="line"
+          data={historyChartData}
+          height="400px"
+          options={{
+            scales: {
+              y: {
+                ticks: {
+                  callback:
+                    "function(value) { return '$' + value.toLocaleString(); }",
+                },
+                grid: { color: "#f3f4f6" },
+              },
+              x: {
+                grid: { display: false },
+              },
+            },
+          }}
+        />
+      </div>
+
+      <!-- Donut (1 columna) -->
+      <div class="space-y-2">
+        <h3 class="text-lg font-bold text-gray-800 ml-1">
+          Distribución por Moneda
+        </h3>
+        <FinanceChart
+          id="allocationChart"
+          type="doughnut"
+          data={allocationChartData}
+          height="400px"
+        />
+      </div>
+
+      <!-- Barras (Full width) -->
+      <div class="lg:col-span-3 space-y-2">
+        <h3 class="text-lg font-bold text-gray-800 ml-1">
+          Flujo de Caja Mensual (Aportes vs Retiros)
+        </h3>
+        <FinanceChart
+          id="flowChart"
+          type="bar"
+          data={flowChartData}
+          height="300px"
+          options={{
+            scales: {
+              y: {
+                grid: { color: "#f3f4f6" },
+              },
+              x: {
+                grid: { display: false },
+              },
+            },
+          }}
+        />
+      </div>
+    </div>
+
+    <!-- Actions -->
+    <div class="flex justify-end pt-4 border-t border-gray-100">
+      <a href="/dashboard" class="text-gray-600 hover:text-gray-900 font-medium"
+        >Volver al Dashboard</a
+      >
+    </div>
+  </div>
 </Layout>

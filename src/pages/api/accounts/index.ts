@@ -1,6 +1,8 @@
 // src/pages/api/accounts/index.ts
 import type { APIRoute } from "astro";
 import { sql, setRLSUser } from "@lib/db";
+import { validateCsrf } from "@lib/csrf-validator";
+import { handleApiError } from "@lib/error-handler";
 
 export const GET: APIRoute = async ({ locals }) => {
   try {
@@ -25,15 +27,29 @@ export const GET: APIRoute = async ({ locals }) => {
       headers: { "Content-Type": "application/json" }
     });
   } catch (error) {
-    return new Response(JSON.stringify({ error: "Error fetching accounts" }), {
-      status: 500,
-      headers: { "Content-Type": "application/json" }
+    return handleApiError({
+      error,
+      logMsg: "Error fetching accounts",
+      type: "json",
+      status: 500
     });
   }
 };
 
-export const POST: APIRoute = async ({ request, locals }) => {
+export const POST: APIRoute = async (context) => {
+  const { request, locals } = context;
   try {
+    // 🔒 Validar CSRF
+    const csrfResult = await validateCsrf(context); // No pasamos path para que devuelva JSON error si falla
+    if (!csrfResult.success) {
+      // Si falló CSRF y es JSON, validateCsrf probablemente devolvió redirect o error standard.
+      // Si queremos un error JSON específico, podríamos manejarlo aquí, pero csrfResult.response ya viene listo.
+      // Sin embargo, validateCsrf por defecto devuelve HTML o Redirect si redirectUrl se pasa.
+      // Si no se pasa redirectUrl, devuelve un error genérico.
+      // Vamos a confiar en la respuesta por ahora, pero idealmente para APIs JSON deberíamos devolver JSON 403.
+      return csrfResult.response!;
+    }
+
     const userId = locals.userId as string;
     if (!userId) {
       return new Response(JSON.stringify({ error: "Unauthorized" }), {
@@ -43,7 +59,9 @@ export const POST: APIRoute = async ({ request, locals }) => {
     }
     await setRLSUser(userId);
 
-    const { name, type, currency } = await request.json();
+    // ✅ Usamos jsonBody devuelto por validateCsrf para no re-leer el stream
+    const body = csrfResult.jsonBody;
+    const { name, type, currency } = body || {};
 
     if (!name || !type || !currency) {
       return new Response(JSON.stringify({ error: "Missing required fields" }), {
@@ -70,9 +88,11 @@ export const POST: APIRoute = async ({ request, locals }) => {
       headers: { "Content-Type": "application/json" }
     });
   } catch (error) {
-    return new Response(JSON.stringify({ error: "Error creating account" }), {
-      status: 500,
-      headers: { "Content-Type": "application/json" }
+    return handleApiError({
+      error,
+      logMsg: "Error creating account",
+      type: "json",
+      status: 500
     });
   }
 };

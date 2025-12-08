@@ -1,0 +1,9 @@
+---
+/**
+ * Componente para agregar campo CSRF a formularios
+ * Uso: <CsrfField />
+ */
+const { csrfToken } = Astro.locals;
+---
+
+<input type="hidden" name="csrf_token" value={csrfToken} />

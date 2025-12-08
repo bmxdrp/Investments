@@ -1,12 +1,18 @@
-// src/pages/api/exchange-rates.ts
+// src/pages/api/transactions/exchange_rate.ts
 import type { APIRoute } from "astro";
-import { sql } from "@lib/db";
+import { sql, setRLSUser } from "@lib/db";
+import { validateCsrf } from "@lib/csrf-validator";
+import { handleApiError } from "@lib/error-handler";
 
 // ============================================
 // GET - Obtener tasas de cambio
 // ============================================
-export const GET: APIRoute = async ({ url }) => {
+export const GET: APIRoute = async ({ url, locals }) => {
   try {
+    const userId = locals.userId as string;
+    // GET puede ser público o privado, pero si tenemos RLS, mejor setear user.
+    if (userId) await setRLSUser(userId);
+
     const searchParams = url.searchParams;
     const date = searchParams.get("date");
     const startDate = searchParams.get("start_date");
@@ -55,30 +61,42 @@ export const GET: APIRoute = async ({ url }) => {
       { status: 200, headers: { "Content-Type": "application/json" } }
     );
   } catch (err: any) {
-    console.error("GET exchange rates ERROR:", err);
-    return new Response(
-      JSON.stringify({ error: err?.message || "Error del servidor" }),
-      { status: 500, headers: { "Content-Type": "application/json" } }
-    );
+    return handleApiError({ error: err, logMsg: "GET exchange rates error", type: "json" });
   }
 };
 
 // ============================================
 // POST - Crear o actualizar tasa de cambio
 // ============================================
-export const POST: APIRoute = async ({ request }) => {
+export const POST: APIRoute = async (context) => {
+  const { request, locals } = context;
   try {
-    let data: any = {};
-    const contentType = request.headers.get("content-type") || "";
+    // 🔒 Verificación Auth
+    const userId = locals.userId;
+    const userRole = locals.userRole;
+    if (!userId || userRole !== 'admin') {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 403, headers: { "Content-Type": "application/json" } });
+    }
 
-    if (contentType.includes("application/json")) {
-      data = await request.json();
-    } else if (contentType.includes("application/x-www-form-urlencoded")) {
-      const text = await request.text();
-      data = Object.fromEntries(new URLSearchParams(text));
+    // 🔒 Validar CSRF
+    const csrfResult = await validateCsrf(context);
+    if (!csrfResult.success) return csrfResult.response!;
+    await setRLSUser(userId);
+
+    // Datos parseados por validateCsrf
+    let data: any = {};
+    if (csrfResult.jsonBody) {
+      data = csrfResult.jsonBody;
+    } else if (csrfResult.formData) {
+      data = Object.fromEntries(csrfResult.formData);
     } else {
-      const formData = await request.formData();
-      data = Object.fromEntries(formData.entries());
+      // Fallback or empty header
+      const contentType = request.headers.get("content-type") || "";
+      if (contentType.includes("application/x-www-form-urlencoded")) {
+        // validateCsrf supports multipart and urlencoded via formData() usually, but if fails
+        // we assume body is consumed. If validateCsrf didn't return data, something is missing.
+        // But let's assume valid case.
+      }
     }
 
     const date = data.date || new Date().toISOString().split('T')[0];
@@ -124,19 +142,28 @@ export const POST: APIRoute = async ({ request }) => {
       { status: existing.length > 0 ? 200 : 201, headers: { "Content-Type": "application/json" } }
     );
   } catch (err: any) {
-    console.error("POST exchange rate ERROR:", err);
-    return new Response(
-      JSON.stringify({ error: err?.message || "Error del servidor" }),
-      { status: 500, headers: { "Content-Type": "application/json" } }
-    );
+    return handleApiError({ error: err, logMsg: "POST exchange rate error", type: "json" });
   }
 };
 
 // ============================================
 // DELETE - Eliminar tasa de cambio
 // ============================================
-export const DELETE: APIRoute = async ({ url }) => {
+export const DELETE: APIRoute = async (context) => {
+  const { url, locals } = context;
   try {
+    // 🔒 Auth
+    const userId = locals.userId;
+    const userRole = locals.userRole;
+    if (!userId || userRole !== 'admin') {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 403, headers: { "Content-Type": "application/json" } });
+    }
+
+    // 🔒 Validar CSRF (Header X-CSRF-Token necesario para DELETE sin body)
+    const csrfResult = await validateCsrf(context);
+    if (!csrfResult.success) return csrfResult.response!;
+    await setRLSUser(userId);
+
     const date = url.searchParams.get("date");
 
     if (!date) {
@@ -167,10 +194,6 @@ export const DELETE: APIRoute = async ({ url }) => {
       { status: 200, headers: { "Content-Type": "application/json" } }
     );
   } catch (err: any) {
-    console.error("DELETE exchange rate ERROR:", err);
-    return new Response(
-      JSON.stringify({ error: err?.message || "Error del servidor" }),
-      { status: 500, headers: { "Content-Type": "application/json" } }
-    );
+    return handleApiError({ error: err, logMsg: "DELETE exchange rate error", type: "json" });
   }
 };

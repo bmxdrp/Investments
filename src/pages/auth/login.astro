@@ -1,5 +1,6 @@
 ---
 import Layout from "@layouts/home.astro";
+import CsrfField from "@components/CsrfField.astro";
 const returnTo = Astro.url.searchParams.get("returnTo") || "/dashboard";
 const safeReturnTo = returnTo.startsWith("/") ? returnTo : "/dashboard";
 const error = Astro.url.searchParams.get("error") || null;
@@ -34,6 +35,8 @@ const error = Astro.url.searchParams.get("error") || null;
         action={`/api/auth/login?returnTo=${safeReturnTo}`}
         class="space-y-4 sm:space-y-6"
       >
+        <CsrfField />
+
         <!-- Email -->
         <div>
           <label class="text-stone-300 text-sm font-medium mb-1.5 block"
@@ -64,6 +67,24 @@ const error = Astro.url.searchParams.get("error") || null;
                    text-stone-100 placeholder-stone-500 focus:outline-none focus:ring-2
                    focus:ring-amber-500/50 focus:border-amber-500 transition-all text-sm sm:text-base"
           />
+        </div>
+
+        <!-- Remember Me -->
+        <div class="flex items-center">
+          <input
+            type="checkbox"
+            name="remember_me"
+            id="remember_me"
+            class="w-4 h-4 rounded border-stone-700 bg-stone-950/50 text-amber-600
+                   focus:ring-2 focus:ring-amber-500/50 focus:ring-offset-0
+                   focus:ring-offset-stone-900 cursor-pointer"
+          />
+          <label
+            for="remember_me"
+            class="ml-2 text-sm text-stone-400 cursor-pointer select-none hover:text-stone-300 transition-colors"
+          >
+            Recordarme
+          </label>
         </div>
 
         <!-- Botón login -->

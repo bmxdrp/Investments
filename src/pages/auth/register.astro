@@ -1,7 +1,6 @@
 ---
 import Layout from "@layouts/home.astro";
-const returnTo = Astro.url.searchParams.get("returnTo") || "/";
-const safeReturnTo = returnTo.startsWith("/") ? returnTo : "/";
+import CsrfField from "@components/CsrfField.astro";
 const error = Astro.url.searchParams.get("error") || null;
 const success = Astro.url.searchParams.get("success") || null;
 ---
@@ -35,6 +34,8 @@ const success = Astro.url.searchParams.get("success") || null;
         action={`/api/auth/register?returnTo=${encodeURIComponent("/auth/login")}`}
         class="space-y-4 sm:space-y-5"
       >
+        <CsrfField />
+
         <!-- Email -->
         <div>
           <label class="text-stone-300 text-sm font-medium mb-1.5 block"

@@ -1,6 +1,6 @@
 ---
 import Layout from "@layouts/admin.astro";
-import { sql } from "@lib/db";
+import { setRLSUser, sql } from "@lib/db";
 
 const userId = Astro.locals.userId;
 if (!userId) {
@@ -16,7 +16,7 @@ let errorMessage = errorParam || "";
 
 try {
     // Set user context for RLS
-    await sql.unsafe(`SET app.user_id = '${userId}'`);
+    await setRLSUser(userId);
 
     users = await sql`
     SELECT u.id, u.email, u.created_at, r.name as role_name

@@ -1,43 +1,51 @@
 import type { APIRoute } from "astro";
-import { sql } from "@lib/db";
+import { setRLSUser, sql } from "@lib/db";
+import { validateCsrf } from "@lib/csrf-validator";
+import { handleApiError } from "@lib/error-handler";
 
-export const POST: APIRoute = async ({ params, locals, redirect }) => {
+export const POST: APIRoute = async (context) => {
+    const { params, locals } = context;
     const userId = locals.userId;
     const userRole = locals.userRole;
 
-    // Verificar autenticación y permisos de admin
-    if (!userId || userRole !== 'admin') {
-        return new Response(JSON.stringify({ error: "No autorizado" }), {
-            status: 403,
-            headers: { "Content-Type": "application/json" },
-        });
-    }
-
-    const { id } = params;
-
-    if (!id) {
-        return new Response(JSON.stringify({ error: "ID de usuario requerido" }), {
-            status: 400,
-            headers: { "Content-Type": "application/json" },
-        });
-    }
-
     try {
+        // 🔒 Validar CSRF
+        // Este endpoint devuelve redirects, por lo que validateCsrf puede encargarse de redirigir si falla.
+        // Asumimos un contexto de formulario HTML.
+        const csrfResult = await validateCsrf(context, '/admin/users');
+        if (!csrfResult.success) {
+            return csrfResult.response!;
+        }
+
+        // Verificar autenticación y permisos de admin
+        if (!userId || userRole !== 'admin') {
+            return new Response(JSON.stringify({ error: "No autorizado" }), {
+                status: 403,
+                headers: { "Content-Type": "application/json" },
+            });
+        }
+
+        const { id } = params;
+
+        if (!id) {
+            return Response.redirect(new URL(`/admin/users?error=${encodeURIComponent("ID de usuario requerido")}`, context.request.url), 302);
+        }
+
         // Establecer contexto de usuario para RLS
-        await sql.unsafe(`SET app.user_id = '${userId}'`);
+        await setRLSUser(userId);
 
         // Verificar que el usuario no se esté eliminando a sí mismo
         if (id === userId) {
-            return redirect(`/admin/users?error=${encodeURIComponent("No puedes eliminarte a ti mismo")}`);
+            return Response.redirect(new URL(`/admin/users?error=${encodeURIComponent("No puedes eliminarte a ti mismo")}`, context.request.url), 302);
         }
 
         // Verificar que el usuario existe
         const userToDelete = await sql`
-      SELECT id, email FROM users WHERE id = ${id}
-    `;
+        SELECT id, email FROM users WHERE id = ${id}
+        `;
 
         if (userToDelete.length === 0) {
-            return redirect(`/admin/users?error=${encodeURIComponent("Usuario no encontrado")}`);
+            return Response.redirect(new URL(`/admin/users?error=${encodeURIComponent("Usuario no encontrado")}`, context.request.url), 302);
         }
 
         // Eliminar sesiones del usuario
@@ -48,9 +56,13 @@ export const POST: APIRoute = async ({ params, locals, redirect }) => {
 
         console.log(`User ${userToDelete[0].email} deleted by admin ${userId}`);
 
-        return redirect(`/admin/users?success=${encodeURIComponent("Usuario eliminado exitosamente")}`);
+        return Response.redirect(new URL(`/admin/users?success=${encodeURIComponent("Usuario eliminado exitosamente")}`, context.request.url), 302);
+
     } catch (error) {
-        console.error("Error deleting user:", error);
-        return redirect(`/admin/users?error=${encodeURIComponent("Error al eliminar el usuario")}`);
+        return handleApiError({
+            error,
+            logMsg: "Error deleting user",
+            type: "/admin/users" // Redirect con error genérico
+        });
     }
 };

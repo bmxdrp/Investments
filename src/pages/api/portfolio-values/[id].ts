@@ -1,6 +1,8 @@
 // src/pages/api/portfolio-values/[id].ts
 import type { APIRoute } from "astro";
 import { sql, setRLSUser } from "@lib/db";
+import { validateCsrf } from "@lib/csrf-validator";
+import { handleApiError } from "@lib/error-handler";
 
 export const GET: APIRoute = async ({ params, locals }) => {
   try {
@@ -10,6 +12,10 @@ export const GET: APIRoute = async ({ params, locals }) => {
     }
 
     const { id } = params;
+    // NOTA: Este endpoint consulta la tabla 'portfolio_values' antigua.
+    // Si la migración a 'transactions' fue completa, este endpoint podría estar obsoleto.
+
+    // Primero verificamos si existen columnas, si falla SQL es porque la tabla no existe o cambió schema.
     const value = await sql`
       SELECT 
         pv.id,
@@ -36,45 +42,35 @@ export const GET: APIRoute = async ({ params, locals }) => {
       headers: { "Content-Type": "application/json" }
     });
   } catch (error) {
-    return new Response(JSON.stringify({ error: "Error fetching portfolio value" }), {
-      status: 500,
-      headers: { "Content-Type": "application/json" }
-    });
+    return handleApiError({ error, logMsg: "Error fetching portfolio value", type: "json" });
   }
 };
 
-export const PUT: APIRoute = async ({ params, request, locals }) => {
+export const PUT: APIRoute = async (context) => {
+  const { params, locals } = context;
   try {
+    // 🔒 Validar CSRF
+    const csrfResult = await validateCsrf(context);
+    if (!csrfResult.success) return csrfResult.response!;
+
     const userId = locals.userId as string;
     if (!userId) {
-      return new Response(JSON.stringify({ error: "Unauthorized" }), {
-        status: 401,
-        headers: { "Content-Type": "application/json" }
-      });
+      return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: { "Content-Type": "application/json" } });
     }
     await setRLSUser(userId);
 
     const { id } = params;
-    const { account_id, date, value, currency } = await request.json();
+    // ✅ Usar jsonBody
+    const body = csrfResult.jsonBody;
+    const { account_id, date, value, currency } = body || {};
 
     if (!account_id || !date || !value || !currency) {
-      return new Response(JSON.stringify({ error: "Missing required fields" }), {
-        status: 400,
-        headers: { "Content-Type": "application/json" }
-      });
+      return new Response(JSON.stringify({ error: "Missing required fields" }), { status: 400, headers: { "Content-Type": "application/json" } });
     }
 
     if (!["COP", "USD"].includes(currency)) {
-      return new Response(JSON.stringify({ error: "Invalid currency" }), {
-        status: 400,
-        headers: { "Content-Type": "application/json" }
-      });
+      return new Response(JSON.stringify({ error: "Invalid currency" }), { status: 400, headers: { "Content-Type": "application/json" } });
     }
-
-    // Verify ownership via account_id or existing record
-    // RLS should handle it if we set user_id, but we need to make sure we are updating a record that belongs to the user.
-    // The update query should implicitly check ownership if RLS is on.
-    // However, if we are changing account_id, we need to check if the new account_id belongs to the user.
 
     const result = await sql`
       UPDATE portfolio_values
@@ -84,32 +80,25 @@ export const PUT: APIRoute = async ({ params, request, locals }) => {
     `;
 
     if (result.length === 0) {
-      return new Response(JSON.stringify({ error: "Portfolio value not found or access denied" }), {
-        status: 404,
-        headers: { "Content-Type": "application/json" }
-      });
+      return new Response(JSON.stringify({ error: "Portfolio value not found or access denied" }), { status: 404, headers: { "Content-Type": "application/json" } });
     }
 
-    return new Response(JSON.stringify(result[0]), {
-      status: 200,
-      headers: { "Content-Type": "application/json" }
-    });
+    return new Response(JSON.stringify(result[0]), { status: 200, headers: { "Content-Type": "application/json" } });
   } catch (error) {
-    return new Response(JSON.stringify({ error: "Error updating portfolio value" }), {
-      status: 500,
-      headers: { "Content-Type": "application/json" }
-    });
+    return handleApiError({ error, logMsg: "Error updating portfolio value", type: "json" });
   }
 };
 
-export const DELETE: APIRoute = async ({ params, locals }) => {
+export const DELETE: APIRoute = async (context) => {
+  const { params, locals } = context;
   try {
+    // 🔒 Validar CSRF (headers)
+    const csrfResult = await validateCsrf(context);
+    if (!csrfResult.success) return csrfResult.response!;
+
     const userId = locals.userId as string;
     if (!userId) {
-      return new Response(JSON.stringify({ error: "Unauthorized" }), {
-        status: 401,
-        headers: { "Content-Type": "application/json" }
-      });
+      return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: { "Content-Type": "application/json" } });
     }
     await setRLSUser(userId);
 
@@ -121,20 +110,11 @@ export const DELETE: APIRoute = async ({ params, locals }) => {
     `;
 
     if (result.length === 0) {
-      return new Response(JSON.stringify({ error: "Portfolio value not found or access denied" }), {
-        status: 404,
-        headers: { "Content-Type": "application/json" }
-      });
+      return new Response(JSON.stringify({ error: "Portfolio value not found or access denied" }), { status: 404, headers: { "Content-Type": "application/json" } });
     }
 
-    return new Response(JSON.stringify({ success: true }), {
-      status: 200,
-      headers: { "Content-Type": "application/json" }
-    });
+    return new Response(JSON.stringify({ success: true }), { status: 200, headers: { "Content-Type": "application/json" } });
   } catch (error) {
-    return new Response(JSON.stringify({ error: "Error deleting portfolio value" }), {
-      status: 500,
-      headers: { "Content-Type": "application/json" }
-    });
+    return handleApiError({ error, logMsg: "Error deleting portfolio value", type: "json" });
   }
 };

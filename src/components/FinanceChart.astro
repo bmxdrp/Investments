@@ -1,0 +1,157 @@
+---
+interface Props {
+    id: string;
+    type: "line" | "bar" | "doughnut" | "pie";
+    data: any;
+    options?: any;
+    height?: string;
+    currency?: string;
+}
+
+const {
+    id,
+    type,
+    data,
+    options = {},
+    height = "300px",
+    currency = "COP",
+} = Astro.props;
+---
+
+<div class="w-full bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
+    <div class="relative w-full" style={`height: ${height}`}>
+        <canvas id={id}></canvas>
+    </div>
+</div>
+
+<script>
+    import Chart from "chart.js/auto";
+
+    class FinanceChart extends HTMLElement {
+        constructor() {
+            super();
+            const canvas = this.querySelector("canvas");
+            if (!canvas) return;
+
+            const type = this.dataset.type as any;
+            const data = JSON.parse(this.dataset.data || "{}");
+            const currency = this.dataset.currency;
+            let options = JSON.parse(this.dataset.options || "{}");
+
+            // Default styles
+            Chart.defaults.font.family = "'Inter', sans-serif";
+            Chart.defaults.color = "#64748b";
+
+            // Advanced Currency Formatting Logic
+            if (currency) {
+                // Y-Axis Ticks (only for Cartesian axes where y is numeric)
+                if (type === "line" || type === "bar") {
+                    if (!options.scales) options.scales = {};
+                    if (!options.scales.y) options.scales.y = {};
+                    if (!options.scales.y.ticks) options.scales.y.ticks = {};
+
+                    // Only apply if user didn't override
+                    if (!options.scales.y.ticks.callback) {
+                        options.scales.y.ticks.callback = function (
+                            value: any,
+                        ) {
+                            if (Math.abs(value) >= 1000000) {
+                                return "$" + (value / 1000000).toFixed(1) + "M";
+                            }
+                            if (Math.abs(value) >= 1000) {
+                                return "$" + (value / 1000).toFixed(0) + "k";
+                            }
+                            return "$" + value;
+                        };
+                    }
+                }
+
+                // Tooltips
+                if (!options.plugins) options.plugins = {};
+                if (!options.plugins.tooltip) options.plugins.tooltip = {};
+                if (!options.plugins.tooltip.callbacks)
+                    options.plugins.tooltip.callbacks = {};
+
+                if (!options.plugins.tooltip.callbacks.label) {
+                    options.plugins.tooltip.callbacks.label = function (
+                        context: any,
+                    ) {
+                        let label = context.dataset.label || "";
+                        if (label) {
+                            label += ": ";
+                        }
+                        if (context.parsed.y !== null) {
+                            // For charts with 'y' value
+                            label += new Intl.NumberFormat("es-CO", {
+                                style: "currency",
+                                currency: currency,
+                                maximumFractionDigits: 0,
+                            }).format(context.parsed.y);
+                        } else if (context.parsed !== null) {
+                            // For Pie/Doughnut where raw value is usually stored differently or directly
+                            const val = context.raw || context.parsed;
+                            if (typeof val === "number") {
+                                label += new Intl.NumberFormat("es-CO", {
+                                    style: "currency",
+                                    currency: currency,
+                                    maximumFractionDigits: 0,
+                                }).format(val);
+                            }
+                        }
+                        return label;
+                    };
+                }
+            }
+
+            new Chart(canvas, {
+                type: type,
+                data: data,
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: {
+                        mode: "index",
+                        intersect: false,
+                    },
+                    plugins: {
+                        legend: {
+                            position: "bottom",
+                            labels: {
+                                usePointStyle: true,
+                                padding: 20,
+                            },
+                        },
+                        tooltip: {
+                            backgroundColor: "rgba(15, 23, 42, 0.9)",
+                            padding: 12,
+                            cornerRadius: 8,
+                            titleFont: {
+                                size: 13,
+                                weight: 600,
+                            },
+                            displayColors: true,
+                            boxPadding: 4,
+                        },
+                    },
+                    ...options,
+                },
+            });
+        }
+    }
+
+    // Check if defined to avoid HMR errors
+    if (!customElements.get("finance-chart")) {
+        customElements.define("finance-chart", FinanceChart);
+    }
+</script>
+
+<finance-chart
+    data-type={type}
+    data-data={JSON.stringify(data)}
+    data-options={JSON.stringify(options)}
+    data-currency={currency}
+>
+    <div class="relative w-full" style={`height: ${height}`}>
+        <canvas id={id}></canvas>
+    </div>
+</finance-chart>

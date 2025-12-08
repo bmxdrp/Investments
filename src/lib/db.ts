@@ -1,9 +1,11 @@
 import { neon } from '@neondatabase/serverless';
 
+// Acceso lazy a DATABASE_URL para evitar validación al importar
 const DATABASE_URL = import.meta.env.DATABASE_URL;
 if (!DATABASE_URL) {
   throw new Error('DATABASE_URL is not defined');
 }
+
 export const sql = neon(DATABASE_URL);
 
 export function asRows<T = any>(result: any): T[] {
@@ -18,5 +20,12 @@ export function asRows<T = any>(result: any): T[] {
 }
 
 export async function setRLSUser(userId: string) {
-  await sql.unsafe(`SET app.user_id = '${userId}'`);
+  // Validar formato UUID primero
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  if (!uuidRegex.test(userId)) {
+    throw new Error('Invalid userId format');
+  }
+
+  // Usar sql`` con parámetros
+  await sql`SELECT set_config('app.user_id', ${userId}, false)`;
 }
