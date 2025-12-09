@@ -47,60 +47,14 @@ async function updateExchangeRate() {
 // 📥 GET handler - reads token from query params
 export const GET: APIRoute = async ({ url }) => {
   try {
-    const token = url.searchParams.get("token");
+    await updateExchangeRate();
 
-    // 🔐 Validar token de seguridad
-    if (token !== import.meta.env.CRON_SECRET) {
-      console.error("Unauthorized cron attempt via GET");
-      return new Response(
-        JSON.stringify({ success: false, error: "Unauthorized" }),
-        { status: 401, headers: { "Content-Type": "application/json" } }
-      );
-    }
-
-    const result = await updateExchangeRate();
-
-    return new Response(JSON.stringify(result), {
+    return new Response(JSON.stringify({success: true}), {
       status: 200,
       headers: { "Content-Type": "application/json" },
     });
   } catch (error) {
     console.error("Cron error (GET):", error);
-
-    return new Response(
-      JSON.stringify({
-        success: false,
-        error: "Internal server error"
-      }),
-      { status: 500, headers: { "Content-Type": "application/json" } }
-    );
-  }
-};
-
-// 📤 POST handler - reads token from request body
-export const POST: APIRoute = async ({ request }) => {
-  try {
-    // Read token from request body
-    const body = await request.json();
-    const token = body?.token;
-
-    // 🔐 Validar token de seguridad
-    if (token !== import.meta.env.CRON_SECRET) {
-      console.error("Unauthorized cron attempt via POST");
-      return new Response(
-        JSON.stringify({ success: false, error: "Unauthorized" }),
-        { status: 401, headers: { "Content-Type": "application/json" } }
-      );
-    }
-
-    const result = await updateExchangeRate();
-
-    return new Response(JSON.stringify(result), {
-      status: 200,
-      headers: { "Content-Type": "application/json" },
-    });
-  } catch (error) {
-    console.error("Cron error (POST):", error);
 
     return new Response(
       JSON.stringify({
