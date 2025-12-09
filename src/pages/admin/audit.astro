@@ -11,7 +11,7 @@ const perPage = Math.max(
   Math.min(200, Number(url.searchParams.get("perPage") || 50)),
 );
 const accountFilter = url.searchParams.get("account") || null;
-const eventFilter = url.searchParams.get("event") || null;
+const typeFilter = url.searchParams.get("type") || null;
 const dateFrom = url.searchParams.get("from") || null;
 const dateTo = url.searchParams.get("to") || null;
 const exportCsv = url.searchParams.get("export") === "1";
@@ -19,52 +19,52 @@ const exportCsv = url.searchParams.get("export") === "1";
 // Construir condiciones dinámicas (seguras con sql template)
 const whereClauses = [];
 if (accountFilter)
-  whereClauses.push(sql`ta.account_id = ${Number(accountFilter)}`);
-if (eventFilter) whereClauses.push(sql`ta.event_type = ${eventFilter}`);
-if (dateFrom) whereClauses.push(sql`ta.created_at >= ${dateFrom}`);
-if (dateTo)
-  whereClauses.push(
-    sql`ta.created_at <= ${dateTo}::timestamp + interval '1 day' - interval '1 second'`,
-  );
+  whereClauses.push(sql`t.account_id = ${Number(accountFilter)}`);
+if (typeFilter) whereClauses.push(sql`t.type = ${typeFilter}`);
+if (dateFrom) whereClauses.push(sql`t.date >= ${dateFrom}`);
+if (dateTo) whereClauses.push(sql`t.date <= ${dateTo}`);
 
 // Generar WHERE combinado
 let whereSql = sql``;
 if (whereClauses.length > 0) {
-  // join with AND
   whereSql = sql`WHERE ${sql.join(whereClauses, sql` AND `)}`;
 }
 
 // Si piden export, devolver CSV directamente
 if (exportCsv) {
-  // Obtener todos los registros que cumplen filtros (limitable si quieres)
   const rows = await sql`
-    SELECT ta.id, ta.created_at, ta.account_id, a.name as account_name, ta.event_type,
-           ta.amount, ta.currency, ta.balance_before, ta.balance_after,
-           ta.market_value_before, ta.market_value_after,
-           ta.source_table, ta.source_id, ta.note, ta.created_by
-    FROM transaction_audit ta
-    LEFT JOIN accounts a ON a.id = ta.account_id
+    SELECT t.id, t.date, t.created_at, t.account_id, a.name as account_name, 
+           t.type, t.amount, t.currency, t.previous_value, t.new_value,
+           t.related_account_id, ra.name as related_account_name,
+           t.related_transaction_id, t.notes, t.user_id, t.usd_to_cop_rate,
+           c.name as category_name
+    FROM transactions t
+    LEFT JOIN accounts a ON a.id = t.account_id
+    LEFT JOIN accounts ra ON ra.id = t.related_account_id
+    LEFT JOIN categories c ON c.id = t.category_id
     ${whereSql}
-    ORDER BY ta.created_at DESC
+    ORDER BY t.date DESC, t.created_at DESC
   `;
 
   // Construir CSV
   const headers = [
     "id",
+    "date",
     "created_at",
     "account_id",
     "account_name",
-    "event_type",
+    "type",
     "amount",
     "currency",
-    "balance_before",
-    "balance_after",
-    "market_value_before",
-    "market_value_after",
-    "source_table",
-    "source_id",
-    "note",
-    "created_by",
+    "previous_value",
+    "new_value",
+    "related_account_id",
+    "related_account_name",
+    "related_transaction_id",
+    "usd_to_cop_rate",
+    "category_name",
+    "notes",
+    "user_id",
   ];
 
   const escapeCsv = (v: any) => {
@@ -87,7 +87,7 @@ if (exportCsv) {
     status: 200,
     headers: {
       "Content-Type": "text/csv; charset=utf-8",
-      "Content-Disposition": `attachment; filename="transaction_audit_export_${new Date().toISOString().slice(0, 10)}.csv"`,
+      "Content-Disposition": `attachment; filename="transactions_export_${new Date().toISOString().slice(0, 10)}.csv"`,
     },
   });
 }
@@ -95,22 +95,25 @@ if (exportCsv) {
 // Consultas para página (paginada)
 const offset = (page - 1) * perPage;
 
-const audits = await sql`
-  SELECT ta.id, ta.created_at, ta.account_id, a.name as account_name, ta.event_type,
-         ta.amount, ta.currency, ta.balance_before, ta.balance_after,
-         ta.market_value_before, ta.market_value_after,
-         ta.source_table, ta.source_id, ta.note, ta.created_by
-  FROM transaction_audit ta
-  LEFT JOIN accounts a ON a.id = ta.account_id
+const transactions = await sql`
+  SELECT t.id, t.date, t.created_at, t.account_id, a.name as account_name, 
+         t.type, t.amount, t.currency, t.previous_value, t.new_value,
+         t.related_account_id, ra.name as related_account_name,
+         t.related_transaction_id, t.notes, t.user_id, t.usd_to_cop_rate,
+         c.name as category_name
+  FROM transactions t
+  LEFT JOIN accounts a ON a.id = t.account_id
+  LEFT JOIN accounts ra ON ra.id = t.related_account_id
+  LEFT JOIN categories c ON c.id = t.category_id
   ${whereSql}
-  ORDER BY ta.created_at DESC
+  ORDER BY t.date DESC, t.created_at DESC
   LIMIT ${perPage} OFFSET ${offset}
 `;
 
 // total count
 const countRes = await sql`
   SELECT COUNT(*)::int as cnt
-  FROM transaction_audit ta
+  FROM transactions t
   ${whereSql}
 `;
 const total = countRes[0]?.cnt ?? 0;
@@ -118,13 +121,19 @@ const totalPages = Math.max(1, Math.ceil(total / perPage));
 
 // Lista de cuentas para filtro dropdown
 const accounts = await sql`SELECT id, name FROM accounts ORDER BY name`;
-const eventTypes = [
+
+const transactionTypes = [
   "contribution",
   "withdrawal",
-  "market_snapshot",
-  "manual_adjustment",
-  "correction",
-  "transfer",
+  "transfer_out",
+  "transfer_in",
+  "adjustment",
+  "gain",
+  "loss",
+  "dividend",
+  "interest",
+  "fee",
+  "initial_balance",
 ];
 ---
 
@@ -137,8 +146,7 @@ const eventTypes = [
             Auditoría de Transacciones
           </h1>
           <p class="text-sm text-slate-500">
-            Registro completo y trazable de contribuciones, retiros, snapshots y
-            correcciones
+            Registro completo de todas las transacciones financieras
           </p>
         </div>
 
@@ -172,13 +180,13 @@ const eventTypes = [
         </div>
 
         <div class="flex items-center gap-2">
-          <label class="text-sm text-slate-600 mr-2">Evento</label>
-          <select name="event" class="border rounded px-2 py-1">
+          <label class="text-sm text-slate-600 mr-2">Tipo</label>
+          <select name="type" class="border rounded px-2 py-1">
             <option value="">Todos</option>
             {
-              eventTypes.map((e) => (
-                <option value={e} selected={e === eventFilter}>
-                  {e}
+              transactionTypes.map((t) => (
+                <option value={t} selected={t === typeFilter}>
+                  {t}
                 </option>
               ))
             }
@@ -235,57 +243,72 @@ const eventTypes = [
               <th class="p-3">Cuenta</th>
               <th class="p-3">Tipo</th>
               <th class="p-3 text-right">Monto</th>
-              <th class="p-3 text-right">Balance Antes</th>
-              <th class="p-3 text-right">Balance Después</th>
-              <th class="p-3 text-right">Market Antes</th>
-              <th class="p-3 text-right">Market Después</th>
-              <th class="p-3">Origen</th>
-              <th class="p-3">Nota</th>
+              <th class="p-3">Moneda</th>
+              <th class="p-3 text-right">Valor Anterior</th>
+              <th class="p-3 text-right">Valor Nuevo</th>
+              <th class="p-3">Cuenta Relacionada</th>
+              <th class="p-3">Categoría</th>
+              <th class="p-3">Notas</th>
               <th class="p-3">Usuario</th>
             </tr>
           </thead>
           <tbody>
             {
-              audits.length === 0 ? (
+              transactions.length === 0 ? (
                 <tr>
                   <td class="p-6 text-center text-slate-400" colspan="11">
                     No hay registros para estos filtros
                   </td>
                 </tr>
               ) : (
-                audits.map((r) => (
-                  <tr class="border-t">
-                    <td class="p-3 align-top">
-                      {new Date(r.created_at).toLocaleString()}
+                transactions.map((t) => (
+                  <tr class="border-t hover:bg-slate-50">
+                    <td class="p-3 align-top whitespace-nowrap">
+                      {new Date(t.date).toLocaleDateString("es-CO")}
                     </td>
                     <td class="p-3 align-top">
-                      {r.account_name ?? r.account_id}
+                      {t.account_name ?? t.account_id}
                     </td>
                     <td class="p-3 align-top">
                       <span class="inline-block px-2 py-1 rounded text-xs font-medium bg-slate-100">
-                        {r.event_type}
+                        {t.type}
                       </span>
                     </td>
-                    <td class="p-3 align-top text-right">
-                      {r.amount?.toLocaleString("es-CO") ?? "-"}
-                    </td>
-                    <td class="p-3 align-top text-right">
-                      {r.balance_before ?? "-"}
-                    </td>
-                    <td class="p-3 align-top text-right">
-                      {r.balance_after ?? "-"}
-                    </td>
-                    <td class="p-3 align-top text-right">
-                      {r.market_value_before ?? "-"}
-                    </td>
-                    <td class="p-3 align-top text-right">
-                      {r.market_value_after ?? "-"}
+                    <td class="p-3 align-top text-right font-medium">
+                      {t.amount?.toLocaleString("es-CO", {
+                        minimumFractionDigits: 2,
+                        maximumFractionDigits: 2,
+                      })}
                     </td>
                     <td class="p-3 align-top">
-                      {r.source_table}:{r.source_id}
+                      <span class="text-xs font-mono">{t.currency}</span>
+                      {t.currency === "USD" && t.usd_to_cop_rate && (
+                        <span class="text-xs text-slate-500 ml-1">
+                          @{t.usd_to_cop_rate}
+                        </span>
+                      )}
                     </td>
-                    <td class="p-3 align-top">{r.note ?? ""}</td>
-                    <td class="p-3 align-top">{r.created_by}</td>
+                    <td class="p-3 align-top text-right">
+                      {t.previous_value?.toLocaleString("es-CO", {
+                        minimumFractionDigits: 2,
+                        maximumFractionDigits: 2,
+                      }) ?? "-"}
+                    </td>
+                    <td class="p-3 align-top text-right">
+                      {t.new_value?.toLocaleString("es-CO", {
+                        minimumFractionDigits: 2,
+                        maximumFractionDigits: 2,
+                      }) ?? "-"}
+                    </td>
+                    <td class="p-3 align-top">
+                      {t.related_account_name ?? 
+                       (t.related_account_id ? `#${t.related_account_id}` : "-")}
+                    </td>
+                    <td class="p-3 align-top">{t.category_name ?? "-"}</td>
+                    <td class="p-3 align-top max-w-xs truncate" title={t.notes}>
+                      {t.notes ?? ""}
+                    </td>
+                    <td class="p-3 align-top">{t.user_id ?? "-"}</td>
                   </tr>
                 ))
               )
@@ -302,7 +325,7 @@ const eventTypes = [
           {
             page > 1 && (
               <a
-                class="px-3 py-1 bg-slate-100 rounded"
+                class="px-3 py-1 bg-slate-100 rounded hover:bg-slate-200"
                 href={`?${new URLSearchParams(Object.fromEntries([...url.searchParams.entries(), ["page", String(page - 1)]]))}`}
               >
                 Anterior
@@ -315,7 +338,7 @@ const eventTypes = [
           {
             page < totalPages && (
               <a
-                class="px-3 py-1 bg-slate-100 rounded"
+                class="px-3 py-1 bg-slate-100 rounded hover:bg-slate-200"
                 href={`?${new URLSearchParams(Object.fromEntries([...url.searchParams.entries(), ["page", String(page + 1)]]))}`}
               >
                 Siguiente

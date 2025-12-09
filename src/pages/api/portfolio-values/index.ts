@@ -6,52 +6,6 @@ import { validateCsrf } from "@lib/csrf-validator";
 import { handleApiError } from "@lib/error-handler";
 
 /**
- * ✅ GET: Historial de valores (solo ajustes, ganancias, pérdidas, iniciales)
- */
-export const GET: APIRoute = async ({ locals }) => {
-  try {
-    const userId = locals.userId as string;
-    if (userId) {
-      await setRLSUser(userId);
-    }
-
-    const values = await sql`
-      SELECT 
-        t.id,
-        t.account_id,
-        t.user_id,
-        t.date,
-        t.created_at,
-        t.amount AS value,
-        t.currency,
-        t.usd_to_cop_rate,
-        t.previous_value,
-        t.new_value,
-        a.name AS account_name,
-        a.type AS account_type
-      FROM transactions t
-      JOIN accounts a ON t.account_id = a.id
-      WHERE t.type IN ('adjustment', 'gain', 'loss', 'initial_balance')
-      ${userId ? sql`AND t.user_id = ${userId}` : sql``}
-      ORDER BY t.date DESC, t.created_at DESC, a.name
-    `;
-
-    return new Response(JSON.stringify(values), {
-      status: 200,
-      headers: { "Content-Type": "application/json" }
-    });
-
-  } catch (error) {
-    return handleApiError({
-      error,
-      logMsg: "GET portfolio-values error",
-      type: "json",
-      status: 500
-    });
-  }
-};
-
-/**
  * ✅ POST: Registrar ajuste manual como transaction
  */
 export const POST: APIRoute = async (context) => {

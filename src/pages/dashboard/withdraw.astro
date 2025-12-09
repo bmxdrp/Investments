@@ -22,19 +22,19 @@ const accounts = asRows<{
       a.id,
       a.name,
       a.currency,
-      COALESCE(pv.amount, 0) as balance
+      COALESCE(pv.new_value, 0) as balance
     FROM accounts a
     LEFT JOIN LATERAL (
-      SELECT amount
+      SELECT new_value
       FROM transactions
       WHERE account_id = a.id
       AND user_id = ${userId}
-      ORDER BY date DESC
+      ORDER BY updated_at DESC
       LIMIT 1
     ) pv ON true
     WHERE a.currency IN ('COP', 'USD')
     AND a.user_id = ${userId}
-    ORDER BY a.name;
+    ORDER BY a.name ASC;
   `,
 );
 

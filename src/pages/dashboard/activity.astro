@@ -2,6 +2,7 @@
 // src/pages/dashboard/activity.astro
 import Default from "@layouts/default.astro";
 import { setRLSUser, sql } from "@lib/db";
+import CsrfField from "@components/CsrfField.astro";
 
 const userId = Astro.locals.userId;
 if (!userId) {
@@ -195,6 +196,7 @@ const todayColombia = new Date().toLocaleDateString("es-CO", {
                 action="/api/portfolio-values" 
                 class="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-3"
               >
+                <CsrfField />
                 <input type="hidden" name="account_id" value={account.id} />
                 <input type="hidden" name="user_id" value={userId} />
                 <input type="hidden" name="currency" value={account.currency} />
@@ -291,6 +293,7 @@ const todayColombia = new Date().toLocaleDateString("es-CO", {
                         action="/api/portfolio-values" 
                         class="grid grid-cols-1 sm:grid-cols-3 gap-3"
                       >
+                        <CsrfField />
                         <input type="hidden" name="account_id" value={sub.id} />
                         <input type="hidden" name="user_id" value={userId} />
                         <input type="hidden" name="currency" value={sub.currency} />
