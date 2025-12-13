@@ -2,7 +2,6 @@
 import "@styles/global.css";
 import Sidebar from "@components/dashboard/sidebar.astro";
 import { ClientRouter } from "astro:transitions";
-import PWAHead from "@components/PWAHead.astro";
 
 interface Props {
   title?: string;
@@ -32,8 +31,6 @@ const {
 
     <link rel="icon" type="image/png" href="/logo.png" />
     <meta name="theme-color" content="#1c1917" />
-
-    <PWAHead />
 
     <ClientRouter />
 

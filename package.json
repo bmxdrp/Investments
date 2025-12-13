@@ -12,11 +12,11 @@
     "test:security": "node scripts/test-security-headers.js"
   },
   "dependencies": {
-    "@astrojs/vercel": "^9.0.1",
+    "@astrojs/vercel": "^9.0.2",
     "@neondatabase/serverless": "^1.0.2",
     "@tailwindcss/vite": "^4.1.17",
     "argon2": "^0.44.0",
-    "astro": "^5.15.9",
+    "astro": "^5.16.5",
     "chart.js": "^4.5.1",
     "chartjs-node-canvas": "^5.0.0",
     "nodemailer": "^7.0.11",
