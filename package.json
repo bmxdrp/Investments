@@ -29,8 +29,6 @@
     "@types/nodemailer": "^7.0.4",
     "dotenv": "^17.2.3",
     "jest": "^30.2.0",
-    "ts-jest": "^29.4.5",
-    "vite-plugin-pwa": "^1.2.0",
-    "workbox-window": "^7.4.0"
+    "ts-jest": "^29.4.5"
   }
 }
