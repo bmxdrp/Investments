@@ -4,7 +4,7 @@ import { getUserGoals } from "@lib/goals";
 import { validateCsrf } from "@lib/csrf-validator";
 import CsrfField from "@components/CsrfField.astro";
 
-const userId = Astro.locals.userId;
+const {userId, name, userRole} = Astro.locals;
 if (!userId) return Astro.redirect("/auth/login");
 
 const goals = await getUserGoals(userId);
@@ -17,7 +17,7 @@ if (Astro.request.method === "POST") {
 }
 ---
 
-<Layout title="Mis Metas" activePage="goals">
+<Layout title="Mis Metas" activePage="goals" name={name} user_type={userRole}>
     <div class="max-w-7xl mx-auto space-y-6">
         <div class="flex items-center justify-between">
             <div>

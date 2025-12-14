@@ -3,7 +3,7 @@ import Layout from "@layouts/default.astro";
 import { sql, setRLSUser } from "@lib/db";
 import { getLatestExchangeRate } from "@lib/finance";
 
-const userId = Astro.locals.userId;
+const {userId, name, userRole} = Astro.locals;
 if (!userId) {
     return Astro.redirect("/auth/login?returnTo=/dashboard/transfer");
 }
@@ -53,7 +53,7 @@ const today = new Date()
     .join("-");
 ---
 
-<Layout title="Transferir Fondos" activePage="transfer">
+<Layout title="Transferir Fondos" activePage="transfer" name={name} user_type={userRole}>
     <div class="max-w-2xl mx-auto">
         <div class="mb-8">
             <h1 class="text-3xl font-bold text-gray-900">Transferir Fondos</h1>

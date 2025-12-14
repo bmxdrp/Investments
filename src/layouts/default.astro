@@ -1,13 +1,14 @@
 ---
 import "@styles/global.css";
 import Sidebar from "@components/dashboard/sidebar.astro";
-import { ClientRouter } from "astro:transitions";
 
 interface Props {
   title?: string;
   activePage: string;
   description?: string;
   noIndex?: boolean;
+  name?: string;
+  user_type?: string;
 }
 
 const {
@@ -15,9 +16,10 @@ const {
   activePage,
   description = "Panel de control de inversiones - Capyte",
   noIndex = true,
+  name,
+  user_type,
 } = Astro.props;
 ---
-
 <!doctype html>
 <html lang="es" transition:animate="fade">
   <head>
@@ -31,8 +33,6 @@ const {
 
     <link rel="icon" type="image/png" href="/logo.png" />
     <meta name="theme-color" content="#1c1917" />
-
-    <ClientRouter />
 
     <style is:global>
       /* Zen Animations */
@@ -98,22 +98,17 @@ const {
     </style>
   </head>
   <body
-    class="min-h-screen bg-stone-50 text-stone-900 font-sans antialiased selection:bg-blue-100 selection:text-blue-900"
+    class="min-h-dvh bg-stone-50 text-stone-900 font-sans antialiased selection:bg-blue-100 selection:text-blue-900"
   >
-    <div class="flex flex-row justify-between min-h-screen w-full relative">
+    <div class="flex flex-row justify-between min-h-dvh w-full relative">
       <aside
-        class="lg:w-72 hidden lg:block h-screen fixed top-0 left-0 bg-white border-r border-stone-100 z-50"
+        class="lg:w-72 h-dvh fixed top-0 left-0 bg-white border-r border-stone-100 z-50"
       >
-        <Sidebar activePage={activePage} />
+        <Sidebar activePage={activePage} name={name} user_type={user_type} />
       </aside>
 
-      <!-- Mobile Sidebar Placeholder/Logic managed inside Sidebar component but we need structure -->
-      <div class="lg:hidden">
-        <Sidebar activePage={activePage} />
-      </div>
-
       <main
-        class="flex-1 w-full lg:ml-72 p-6 lg:p-12 pt-20 lg:pt-12 min-h-screen"
+        class="flex-1 w-full lg:ml-72 p-6 lg:p-12 pt-20 lg:pt-12 min-h-dvh"
         transition:animate="slide"
       >
         <div class="max-w-6xl mx-auto animate-zen-fade-up">
@@ -121,29 +116,5 @@ const {
         </div>
       </main>
     </div>
-
-    <!-- PWA Cache Warmer -->
-    <script is:inline>
-      if ("serviceWorker" in navigator) {
-        window.addEventListener("load", () => {
-          // Esperar un momento para no afectar la carga inicial
-          setTimeout(() => {
-            const routesToCache = [
-              "/dashboard",
-              "/dashboard/accounts",
-              "/dashboard/contribute",
-              "/dashboard/withdraw",
-              "/dashboard/history",
-            ];
-
-            routesToCache.forEach((route) => {
-              fetch(route).catch((err) =>
-                console.log("Cache warm failed for", route),
-              );
-            });
-          }, 3000);
-        });
-      }
-    </script>
   </body>
 </html>

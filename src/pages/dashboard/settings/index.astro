@@ -3,7 +3,7 @@ import Layout from "@layouts/default.astro";
 import { sql } from "@lib/db";
 import { handleApiError } from "@lib/error-handler";
 
-const userId = Astro.locals.userId;
+const {userId, name, userRole} = Astro.locals;
 if (!userId) return Astro.redirect("/auth/login");
 
 // Obtener datos del usuario
@@ -16,7 +16,7 @@ const success = Astro.url.searchParams.get("success");
 const error = Astro.url.searchParams.get("error");
 ---
 
-<Layout title="Ajustes de Cuenta" activePage="settings">
+<Layout title="Ajustes de Cuenta" activePage="settings" name={name} user_type={userRole}>
     <div class="max-w-4xl mx-auto space-y-6">
         <div class="flex items-center justify-between">
             <div>

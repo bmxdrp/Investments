@@ -2,9 +2,11 @@
 // Sidebar.astro
 interface Props {
   activePage: string;
+  name: string;
+  user_type: string;
 }
 
-const { activePage } = Astro.props;
+const { activePage, name, user_type } = Astro.props;
 
 // 1. Definir metadatos conocidos (Orden, Iconos, Títulos)
 // Si un archivo existe pero no está aquí, se generará genérico.
@@ -12,68 +14,36 @@ const PAGE_METADATA: Record<
   string,
   { name: string; icon: string; order: number }
 > = {
-  index: { name: "Dashboard", icon: "dashboard", order: 1 },
+  "": { name: "Dashboard", icon: "dashboard", order: 1 },
   accounts: { name: "Cuentas", icon: "accounts", order: 2 },
   contribute: { name: "Aportes", icon: "contribute", order: 3 },
   withdraw: { name: "Retiros", icon: "withdraw", order: 4 },
   transfer: { name: "Transferencias", icon: "transfer", order: 5 },
-  activity: { name: "Actividad", icon: "activity", order: 6 },
+  performance: { name: "Rendimientos", icon: "performance", order: 6 },
   history: { name: "Historial", icon: "history", order: 7 },
   goals: { name: "Metas", icon: "goals", order: 8 },
   alerts: { name: "Alertas", icon: "alerts", order: 9 },
-  settings: { name: "Ajustes", icon: "settings", order: 99 },
+  // settings: { name: "Ajustes", icon: "settings", order: 99 },
 };
-
-// 2. Detectar archivos reales en la carpeta dashboard
-const pageFiles = import.meta.glob("/src/pages/dashboard/*.astro");
-
-// 3. Generar menú dinámico
-const menuItems = Object.keys(pageFiles)
-  .map((path) => {
-    // Extraer nombre de archivo: /src/pages/dashboard/withdraw.astro -> withdraw
-    const fileName = path.split("/").pop()?.replace(".astro", "") || "";
-
-    // Ignorar archivos que no sean páginas
-    if (!fileName) return null;
-
-    const meta = PAGE_METADATA[fileName];
-    const href = fileName === "index" ? "/dashboard" : `/dashboard/${fileName}`;
-    const pageId = fileName === "index" ? "dashboard" : fileName;
-
-    // Si tenemos metadatos, usarlos.
-    if (meta) {
-      return {
-        name: meta.name,
-        href,
-        icon: meta.icon,
-        page: pageId,
-        order: meta.order,
-      };
-    } else {
-      // Página nueva no configurada (Fallback)
-      return {
-        name: fileName.charAt(0).toUpperCase() + fileName.slice(1),
-        href,
-        icon: "document", // Icono genérico
-        page: pageId,
-        order: 100, // Al final
-      };
-    }
-  })
-  .filter((item) => item !== null) // Eliminar nulos
-  // @ts-ignore
-  .sort((a, b) => (a.order || 100) - (b.order || 100)); // Ordenar
+  const menuItems = Object.entries(PAGE_METADATA).map(([page, meta]) => {
+    return {
+      name: meta.name,
+      href: `/dashboard/${page}`,
+      icon: meta.icon,
+      order: meta.order,
+    };
+  });
 ---
 
 <!-- Mobile Menu Button with Zen Blur -->
 <button
   id="mobile-menu-button"
   type="button"
-  class="fixed top-4 left-4 z-50 lg:hidden p-2.5 rounded-xl bg-white/90 backdrop-blur-md shadow-sm border border-stone-200 text-stone-600 hover:text-stone-900 transition-all hover:scale-105 active:scale-95"
+  class="fixed top-4 right-4 z-50 lg:hidden p-2.5 rounded-xl bg-white/90 backdrop-blur-md shadow-sm border border-stone-200 text-stone-600 hover:text-stone-900 transition-all hover:scale-105 active:scale-95"
 >
   <svg
     id="menu-open-icon"
-    class="w-6 h-6"
+    class="w-6 h-6 lg:hidden z-50"
     fill="none"
     stroke="currentColor"
     viewBox="0 0 24 24"
@@ -86,7 +56,7 @@ const menuItems = Object.keys(pageFiles)
   </svg>
   <svg
     id="menu-close-icon"
-    class="w-6 h-6 hidden"
+    class="w-6 h-6 hidden z-50"
     fill="none"
     stroke="currentColor"
     viewBox="0 0 24 24"
@@ -107,7 +77,7 @@ const menuItems = Object.keys(pageFiles)
 </div>
 
 <!-- Sidebar: Zen Design -->
-<aside id="sidebar" class="h-full flex flex-col bg-white">
+<aside id="sidebar" class="lg:w-72 hidden lg:flex flex-col bg-white">
   <!-- Header Minimalista -->
   <div class="flex items-center gap-4 px-8 py-8">
     <div class="relative group">
@@ -130,8 +100,8 @@ const menuItems = Object.keys(pageFiles)
   </div>
 
   <!-- Navigation -->
-  <nav class="flex-1 overflow-y-auto px-4 py-2 custom-scrollbar">
-    <ul class="space-y-1.5">
+  <nav class="flex-1 overflow-y-auto overflow-x-hidden custom-scrollbar">
+    <ul class="space-y-1">
       {
         menuItems.map((item: any) => {
           const isActive = activePage === item.page;
@@ -139,7 +109,7 @@ const menuItems = Object.keys(pageFiles)
             <li>
               <a
                 href={item.href}
-                class={`group flex items-center gap-3.5 px-4 py-3.5 rounded-2xl transition-all duration-300 ease-out
+                class={`w-full group flex items-center gap-3.5 px-8 py-3 rounded-2xl transition-all duration-300 ease-out
                 ${
                   isActive
                     ? "bg-slate-900 text-white shadow-lg shadow-slate-900/20 translate-x-1"
@@ -226,7 +196,7 @@ const menuItems = Object.keys(pageFiles)
                       />
                     </svg>
                   )}
-                  {item.icon === "activity" && (
+                  {item.icon === "performance" && (
                     <svg
                       class="w-5 h-5"
                       fill="none"
@@ -292,7 +262,7 @@ const menuItems = Object.keys(pageFiles)
                       />
                     </svg>
                   )}
-                  {item.icon === "document" && (
+                  {item.icon === "history" && (
                     <svg
                       class="w-5 h-5"
                       fill="none"
@@ -322,20 +292,33 @@ const menuItems = Object.keys(pageFiles)
   </nav>
 
   <!-- User Section (Static for now) -->
-  <div class="p-4 border-t border-stone-100">
-    <div
-      class="flex items-center gap-3 p-3 rounded-2xl bg-stone-50 hover:bg-stone-100 transition-colors cursor-pointer group"
+  <div class="flex gap-2 justify-between items-center py-4 px-4 border-t border-stone-100">
+    <a
+      href="/dashboard/settings"
+      aria-label="Ajustes del perfil"
+      title="Ajustes del perfil"
+      class="flex flex-1 items-center gap-3 p-3 rounded-2xl bg-stone-50 hover:bg-stone-100 transition-colors cursor-pointer group"
     >
       <div
         class="w-10 h-10 rounded-full bg-gradient-to-tr from-stone-200 to-stone-300 flex items-center justify-center text-stone-600 font-bold group-hover:scale-105 transition-transform"
       >
-        JP
+        {name.charAt(0).toUpperCase()}
       </div>
       <div class="flex-1 min-w-0">
-        <p class="text-sm font-bold text-stone-900 truncate">Juan Pérez</p>
-        <p class="text-xs text-stone-500 truncate">Premium Member</p>
+        <p class="text-sm font-bold text-stone-900 truncate">{name}</p>
+        <p class="text-xs text-stone-500 truncate">{user_type === "634690a7-0650-4932-a1cb-016d853af26a" ? "Free Account" : "Premium Account"}</p>
       </div>
-    </div>
+    </a>
+    <a
+      href="/auth/logout"
+      aria-label="Cerrar Sesión"
+      title="Cerrar Sesión"
+      class="flex items-center justify-center text-red-600 py-4 px-4 rounded-xl bg-red-100 hover:text-white hover:bg-red-600 transition-colors cursor-pointer"
+      >
+        <svg class="size-4" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg">
+          <path d="m 8 0 c -0.550781 0 -1 0.449219 -1 1 v 5 c 0 0.550781 0.449219 1 1 1 s 1 -0.449219 1 -1 v -5 c 0 -0.550781 -0.449219 -1 -1 -1 z m -3.136719 1.816406 c -0.128906 0.015625 -0.253906 0.058594 -0.367187 0.125 c -2.734375 1.582032 -4.074219 4.816406 -3.257813 7.871094 c 0.820313 3.050781 3.59375 5.183594 6.75 5.1875 c 3.160157 0.003906 5.941407 -2.121094 6.765625 -5.167969 c 0.828125 -3.050781 -0.5 -6.289062 -3.230468 -7.878906 c -0.476563 -0.28125 -1.089844 -0.121094 -1.367188 0.359375 c -0.132812 0.226562 -0.171875 0.5 -0.105469 0.757812 c 0.070313 0.257813 0.234375 0.476563 0.464844 0.609376 c 1.957031 1.140624 2.902344 3.441406 2.3125 5.628906 c -0.59375 2.183594 -2.570313 3.695312 -4.832031 3.691406 c -2.265625 -0.003906 -4.238282 -1.519531 -4.824219 -3.707031 s 0.363281 -4.488281 2.324219 -5.621094 c 0.476562 -0.277344 0.640625 -0.886719 0.363281 -1.363281 c -0.132813 -0.230469 -0.347656 -0.398438 -0.605469 -0.464844 c -0.125 -0.035156 -0.257812 -0.042969 -0.390625 -0.027344 z m 0 0" fill="currentColor"/>
+        </svg>
+      </a>
   </div>
 </aside>
 
@@ -354,21 +337,21 @@ const menuItems = Object.keys(pageFiles)
 
     if (isMobileMenuOpen) {
       // Open
-      sidebar?.classList.remove("hidden");
+      sidebar?.classList.toggle("hidden");
       sidebar?.classList.add(
         "fixed",
         "inset-y-0",
         "left-0",
-        "z-50",
+        "z-40",
         "w-72",
         "shadow-2xl",
         "animate-slide-in",
       );
-      sidebarOverlay?.classList.remove("hidden");
+      sidebarOverlay?.classList.toggle("hidden");
       setTimeout(() => sidebarOverlay?.classList.add("opacity-100"), 10); // Fade in
 
-      openIcon?.classList.add("hidden");
-      closeIcon?.classList.remove("hidden");
+      openIcon?.classList.toggle("hidden");
+      closeIcon?.classList.toggle("hidden");
       document.body.style.overflow = "hidden"; // Prevent scrolling
     } else {
       // Close
@@ -380,15 +363,16 @@ const menuItems = Object.keys(pageFiles)
         "fixed",
         "inset-y-0",
         "left-0",
-        "z-50",
+        "z-40",
         "w-72",
         "shadow-2xl",
         "animate-slide-in",
       );
+      sidebar?.classList.add("hidden");
       // Reset to original class state if needed (handled by CSS media queries mostly)
 
-      openIcon?.classList.remove("hidden");
-      closeIcon?.classList.add("hidden");
+      openIcon?.classList.toggle("hidden");
+      closeIcon?.classList.toggle("hidden");
       document.body.style.overflow = "";
     }
   }
@@ -400,9 +384,11 @@ const menuItems = Object.keys(pageFiles)
   document.addEventListener("astro:page-load", () => {
     if (isMobileMenuOpen) toggleMobileMenu();
   });
+  document.addEventListener("astro:load", () => {
+   if (isMobileMenuOpen) toggleMobileMenu();
+  });
 </script>
-
-<style>
+<style is:global>
   /* Custom Scrollbar */
   .custom-scrollbar::-webkit-scrollbar {
     width: 6px;

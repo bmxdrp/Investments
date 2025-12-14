@@ -3,7 +3,7 @@ import Layout from "@layouts/default.astro";
 import { sql, asRows } from "@lib/db";
 import FinanceChart from "@components/FinanceChart.astro";
 
-const userId = Astro.locals.userId;
+const {userId, name, userRole} = Astro.locals;
 if (!userId) return Astro.redirect("/auth/login?returnTo=/dashboard/charts");
 
 // 1. Configuración y Datos Base
@@ -234,7 +234,7 @@ const worstMonth = worstMonthV.month
   : null;
 ---
 
-<Layout title="Dashboard - Gráficos" activePage="dashboard">
+<Layout title="Dashboard - Gráficos" activePage="dashboard" name={name} user_type={userRole}>
   <div class="max-w-7xl mx-auto space-y-8">
     <div class="flex items-center justify-between">
       <div>

@@ -22,7 +22,7 @@ function extractSessionId(cookieHeader: string): string | null {
   return match?.[1] ?? null;
 }
 
-async function validateSession(sessionId: string): Promise<{ userId: string; userRole: string | null } | null> {
+async function validateSession(sessionId: string): Promise<{ userId: string; userRole: string | null; name: string | null } | null> {
   // Verificar cache primero
   const now = Date.now();
   const cachedTimestamp = cacheTimestamps.get(sessionId);
@@ -30,14 +30,14 @@ async function validateSession(sessionId: string): Promise<{ userId: string; use
   if (cachedTimestamp && now - cachedTimestamp < CACHE_TTL) {
     const cached = sessionCache.get(sessionId);
     if (cached && cached.expiresAt > new Date()) {
-      return { userId: cached.userId, userRole: cached.userRole };
+      return { userId: cached.userId, userRole: cached.userRole, name: cached.name };
     }
   }
 
   // Consultar base de datos con JOIN para obtener el rol
   try {
     const rows = await sql`
-      SELECT s.user_id, s.expires_at, r.name as role_name
+      SELECT s.user_id, s.expires_at, s.name, s.role_id as role_name
       FROM sessions s
       LEFT JOIN users u ON s.user_id = u.id
       LEFT JOIN roles r ON u.role_id = r.id
@@ -66,13 +66,14 @@ async function validateSession(sessionId: string): Promise<{ userId: string; use
     const sessionData = {
       userId: session.user_id,
       userRole: session.role_name || null,
+      name: session.name,
       expiresAt,
     };
 
     sessionCache.set(sessionId, sessionData);
     cacheTimestamps.set(sessionId, now);
 
-    return { userId: session.user_id, userRole: session.role_name || null };
+    return { userId: session.user_id, userRole: session.role_name || null, name: session.name };
   } catch (error) {
     console.error("Error validating session:", error);
     return null;
@@ -122,6 +123,7 @@ export const onRequest = defineMiddleware(async (ctx, next) => {
   // Inicializar userId y userRole
   locals.userId = null;
   locals.userRole = null;
+  locals.name = null;
 
   // Gestionar token CSRF (Persistente vía Cookie)
   const { generateCsrfToken } = await import('@lib/csrf');
@@ -148,6 +150,7 @@ export const onRequest = defineMiddleware(async (ctx, next) => {
     if (sessionData) {
       locals.userId = sessionData.userId;
       locals.userRole = sessionData.userRole;
+      locals.name = sessionData.name;
     }
   }
 

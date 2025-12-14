@@ -4,7 +4,7 @@ import { asRows, sql } from "@lib/db";
 import { getCategories } from "@lib/categories";
 import CsrfField from "@components/CsrfField.astro";
 
-const userId = Astro.locals.userId;
+const {userId, name, userRole} = Astro.locals;
 
 if (!userId) {
   return Astro.redirect("/auth/login?returnTo=/dashboard/withdraw");
@@ -49,7 +49,7 @@ const today = new Date().toLocaleDateString("en-CA", {
 });
 ---
 
-<Layout title="Retirar Fondos" activePage="withdraw">
+<Layout title="Retirar Fondos" activePage="withdraw" name={name} user_type={userRole}>
   <div class="max-w-2xl mx-auto space-y-6">
     <!-- Header -->
     <div class="mb-8 pl-1">

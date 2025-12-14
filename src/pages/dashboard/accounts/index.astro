@@ -2,7 +2,7 @@
 import Layout from "@layouts/default.astro";
 import { sql } from "@lib/db";
 
-const userId = Astro.locals.userId;
+const {userId, name, userRole} = Astro.locals;
 
 if (!userId) {
   return Astro.redirect("/auth/login?returnTo=/dashboard/accounts");
@@ -232,7 +232,7 @@ const mainAccounts = Array.from(accountsMap.values()).filter(
 const accounts = Array.from(accountsMap.values());
 ---
 
-<Layout title="Gestión de Cuentas" activePage="accounts">
+<Layout title="Gestión de Cuentas" activePage="accounts" name={name} user_type={userRole}>
   <div class="max-w-7xl mx-auto space-y-4 sm:space-y-6">
     <div
       class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4"

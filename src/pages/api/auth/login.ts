@@ -37,14 +37,14 @@ export const POST: APIRoute = async (context) => {
 
     // Buscar usuario
     const user = await sql`
-      SELECT id, password_hash, email_verified_at 
+      SELECT id, password_hash, email_verified_at, name, role_id
       FROM users 
       WHERE email = ${parsed.email}
       LIMIT 1
     `;
 
     if (user.length === 0) {
-      const err = new Error("Usuario o contraseña incorrectos");
+      const err = new Error("Credenciales incorrectas.");
       console.error("Auth Fail:", err.message);
       // ✅ CORRECTO: Construir URL completa para redirect
       return new Response(null, {
@@ -56,12 +56,12 @@ export const POST: APIRoute = async (context) => {
     }
 
     const found = user[0];
+    console.log(found);
 
     // Validar contraseña
     const valid = await argon2.verify(found.password_hash, parsed.password);
     if (!valid) {
-      const err = new Error("Usuario o contraseña incorrectos");
-      console.error("Auth Fail (pwd):", found.id);
+      const err = new Error("Credenciales incorrectas.");
       return new Response(null, {
         status: 303,
         headers: {
@@ -72,7 +72,7 @@ export const POST: APIRoute = async (context) => {
 
     // Verificar que el email esté verificado
     if (!found.email_verified_at) {
-      const err = new Error("Debes verificar tu correo electrónico antes de iniciar sesión. Revisa tu bandeja de entrada.");
+      const err = new Error("Debes verificar tu correo electrónico antes de iniciar sesión. Revisa tu bandeja de entrada o la carpeta de spam.");
       return new Response(null, {
         status: 303,
         headers: {
@@ -93,10 +93,10 @@ export const POST: APIRoute = async (context) => {
     const expiresAt = new Date(Date.now() + sessionDuration);
 
     await sql`
-      INSERT INTO sessions (id, user_id, expires_at)
-      VALUES (${sessionId}, ${found.id}, ${expiresAt.toISOString()})
+      INSERT INTO sessions (id, user_id, expires_at, name, role_id)
+      VALUES (${sessionId}, ${found.id}, ${expiresAt.toISOString()}, ${found.name}, ${found.role_id})
     `;
-
+    
     // ✅ CORRECTO: Crear Response con cookie y redirect en un solo paso
     return new Response(null, {
       status: 302,

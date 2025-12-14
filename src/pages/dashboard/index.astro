@@ -5,7 +5,7 @@ import { getDashboardData, getLatestExchangeRate } from "@lib/finance";
 const ext = await getLatestExchangeRate();
 const currentUsdRate = ext?.usd_to_cop;
 
-const userId = Astro.locals.userId;
+const {userId, name, userRole} = Astro.locals;
 
 if (!userId) {
   return Astro.redirect("/auth/login?returnTo=/");
@@ -36,7 +36,7 @@ const formatCOP = (value: number) => {
 };
 ---
 
-<Layout title="Dashboard" activePage="dashboard">
+<Layout title="Dashboard" activePage="dashboard" name={name} user_type={userRole}>
   <div class="max-w-7xl mx-auto space-y-6">
     <!-- Header -->
     <div>

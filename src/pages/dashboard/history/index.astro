@@ -3,7 +3,7 @@ import Layout from "@layouts/default.astro";
 import { sql } from "@lib/db";
 import { getLatestExchangeRate } from "@lib/finance";
 
-const userId = Astro.locals.userId;
+const {userId, name, userRole} = Astro.locals;
 
 if (!userId) {
   return Astro.redirect("/auth/login?returnTo=/dashboard/history");
@@ -117,7 +117,7 @@ const getTypeLabel = (type: string) => {
 };
 ---
 
-<Layout title="Historial de Movimientos" activePage="history">
+<Layout title="Historial de Movimientos" activePage="history" name={name} user_type={userRole}>
       <div class="max-w-6xl mx-auto space-y-4 sm:space-y-6">
         <!-- Header -->
         <div class="mb-4 sm:mb-6">
