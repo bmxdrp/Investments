@@ -33,7 +33,7 @@ export const POST: APIRoute = async (context) => {
       }
       return new Response(null, {
         status: 302,
-        headers: { Location: "/auth/login?returnTo=/dashboard/activity" },
+        headers: { Location: "/auth/login?returnTo=/dashboard/performance" },
       });
     }
     await setRLSUser(userId);
@@ -112,7 +112,7 @@ export const POST: APIRoute = async (context) => {
 
     return new Response(null, {
       status: 302,
-      headers: { Location: "/dashboard/activity?success=1" }
+      headers: { Location: "/dashboard/performance?success=1" }
     });
 
   } catch (error: any) {
@@ -122,7 +122,7 @@ export const POST: APIRoute = async (context) => {
     return handleApiError({
       error,
       logMsg: "POST portfolio-values error",
-      type: "/dashboard/activity" // Redirect en caso de error de navegador
+      type: "/dashboard/performance" // Redirect en caso de error de navegador
     });
   }
 };

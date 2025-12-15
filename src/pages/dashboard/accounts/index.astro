@@ -152,6 +152,7 @@ const accountsRaw = await sql`
 
   FROM accounts a
   WHERE a.user_id = ${userId}
+  AND a.is_active = true
   
   ORDER BY 
     COALESCE(a.parent_account_id, a.id) ASC,
@@ -227,6 +228,15 @@ accountsMap.forEach((account) => {
 const mainAccounts = Array.from(accountsMap.values()).filter(
   (acc) => acc.parent_account_id === null,
 );
+
+// Ordenar subcuentas de mayor a menor valor (convertido a COP para comparación justa)
+for (const parent of mainAccounts) {
+  parent.subaccounts.sort((a, b) => {
+    const valueA = Number(a.latest_value);
+    const valueB = Number(b.latest_value);
+    return valueB - valueA; // Orden descendente
+  });
+}
 
 // Convertir a array para el template
 const accounts = Array.from(accountsMap.values());
@@ -478,11 +488,11 @@ const accounts = Array.from(accountsMap.values());
             required
             class="w-full border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-blue-500"
           >
-            <option value="broker">Broker</option>
-            <option value="fondo">Fondo de Inversión</option>
-            <option value="banco">Cuenta Bancaria</option>
-            <option value="cripto">Crypto Exchange</option>
-            <option value="otro">Otro</option>
+            <option value="Broker">Broker</option>
+            <option value="Fondo">Fondo de Inversión</option>
+            <option value="Banco">Cuenta Bancaria</option>
+            <option value="Cripto">Crypto Exchange</option>
+            <option value="Otro">Otro</option>
           </select>
         </div>
         <div>
