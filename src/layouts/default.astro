@@ -3,12 +3,12 @@ import "@styles/global.css";
 import Sidebar from "@components/dashboard/sidebar.astro";
 
 interface Props {
-  title?: string;
+  title: string | null;
   activePage: string;
   description?: string;
   noIndex?: boolean;
-  name?: string;
-  user_type?: string;
+  name: string | null;
+  user_type: string | null;
 }
 
 const {
@@ -102,7 +102,7 @@ const {
   >
     <div class="flex flex-row justify-between min-h-dvh w-full relative">
       <aside
-        class="lg:w-72 h-dvh fixed top-0 left-0 bg-white border-r border-stone-100 z-50"
+        class="lg:w-60 h-dvh fixed top-0 left-0 bg-white border-r border-stone-100 z-50"
       >
         <Sidebar activePage={activePage} name={name} user_type={user_type} />
       </aside>

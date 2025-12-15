@@ -98,7 +98,7 @@ export const POST: APIRoute = async (context) => {
       amount,
       currency,
       date,
-      notes: "Ajuste manual por usuario",
+      notes: "Ajuste manual",
       previous_value: previous_value ?? 0,
       new_value: amount,
       user_id: userId,

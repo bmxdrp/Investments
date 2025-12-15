@@ -2,9 +2,11 @@
 // Admin Sidebar
 interface Props {
   activePage: string;
+  name: string;
+  user_type: string;
 }
 
-const { activePage } = Astro.props;
+const { activePage, name, user_type } = Astro.props;
 
 const adminItems = [
   {
@@ -63,7 +65,7 @@ const adminItems = [
 <!-- Sidebar -->
 <section
   id="sidebar"
-  class="fixed top-0 left-0 z-40 h-screen w-64 bg-stone-900 border-r border-stone-800 transform -translate-x-full lg:translate-x-0 transition-transform duration-300 ease-in-out"
+  class="fixed top-0 left-0 z-40 h-screen w-60 bg-stone-900 border-r border-stone-800 transform -translate-x-full lg:translate-x-0 transition-transform duration-300 ease-in-out"
 >
   <div class="flex flex-col h-full">
     <!-- Logo/Header -->

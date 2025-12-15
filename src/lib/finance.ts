@@ -33,6 +33,7 @@ export async function getDashboardData(userId: string) {
       a.parent_account_id
     FROM accounts a
     WHERE a.user_id = ${userId}
+    AND a.is_active = true
   `;
 
   const accountsMap: Record<number, any> = {};
@@ -104,6 +105,15 @@ export async function getDashboardData(userId: string) {
       }
       accTotalCOP += sub.latest_value_cop;
     });
+
+    // Ordenar subcuentas de mayor a menor valor (convertido a COP para comparación justa)
+for (const parent of accounts) {
+  parent.subaccounts.sort((a:any, b:any) => {
+    const valueA = Number(a.latest_value);
+    const valueB = Number(b.latest_value);
+    return valueB - valueA; // Orden descendente
+  });
+}
 
     acc.total_with_subs = accTotalOriginal;      // ✅ Total en moneda original
     acc.total_with_subs_cop = accTotalCOP;       // ✅ Total en COP
@@ -369,6 +379,7 @@ export async function getAllAccountBalances(userId: string) {
 
     FROM accounts a
     WHERE a.user_id = ${userId}
+    AND a.is_active = true
     ORDER BY a.name ASC
   `;
 }

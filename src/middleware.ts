@@ -13,7 +13,7 @@ const UNPROTECTED_ROUTES = [
 ];
 
 // Cache de sesiones para reducir consultas a DB
-const sessionCache = new Map<string, { userId: string; userRole: string | null; expiresAt: Date }>();
+const sessionCache = new Map<string, { userId: string; expiresAt: Date }>();
 const CACHE_TTL = 120 * 60 * 1000; // 2 horas
 const cacheTimestamps = new Map<string, number>();
 
@@ -22,7 +22,7 @@ function extractSessionId(cookieHeader: string): string | null {
   return match?.[1] ?? null;
 }
 
-async function validateSession(sessionId: string): Promise<{ userId: string; userRole: string | null; name: string | null } | null> {
+async function validateSession(sessionId: string): Promise<{ userId: string; expiresAt: Date } | null> {
   // Verificar cache primero
   const now = Date.now();
   const cachedTimestamp = cacheTimestamps.get(sessionId);
@@ -30,7 +30,7 @@ async function validateSession(sessionId: string): Promise<{ userId: string; use
   if (cachedTimestamp && now - cachedTimestamp < CACHE_TTL) {
     const cached = sessionCache.get(sessionId);
     if (cached && cached.expiresAt > new Date()) {
-      return { userId: cached.userId, userRole: cached.userRole, name: cached.name };
+      return { userId: cached.userId, expiresAt: cached.expiresAt };
     }
   }
 
@@ -73,7 +73,7 @@ async function validateSession(sessionId: string): Promise<{ userId: string; use
     sessionCache.set(sessionId, sessionData);
     cacheTimestamps.set(sessionId, now);
 
-    return { userId: session.user_id, userRole: session.role_name || null, name: session.name };
+    return { userId: session.user_id, expiresAt: session.expires_at };
   } catch (error) {
     console.error("Error validating session:", error);
     return null;
@@ -149,8 +149,6 @@ export const onRequest = defineMiddleware(async (ctx, next) => {
     const sessionData = await validateSession(sessionId);
     if (sessionData) {
       locals.userId = sessionData.userId;
-      locals.userRole = sessionData.userRole;
-      locals.name = sessionData.name;
     }
   }
 
@@ -164,7 +162,7 @@ export const onRequest = defineMiddleware(async (ctx, next) => {
 
   // Verificar si la ruta requiere rol de administrador
   if (isAdminRoute(path) && locals.userRole !== 'admin') {
-    console.log(`Access denied to ${path} for user ${locals.userId} with role ${locals.userRole}`);
+    console.log(`Access denied to ${path} for user ${locals.userId}`);
     return createForbiddenResponse(url);
   }
 

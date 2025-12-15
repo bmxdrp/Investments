@@ -53,7 +53,7 @@ const today = new Date()
     .join("-");
 ---
 
-<Layout title="Transferir Fondos" activePage="transfer" name={name} user_type={userRole}>
+<Layout title="Transferir Fondos" activePage="Transferencias" name={name} user_type={userRole}>
     <div class="max-w-2xl mx-auto">
         <div class="mb-8">
             <h1 class="text-3xl font-bold text-gray-900">Transferir Fondos</h1>
@@ -350,23 +350,22 @@ const today = new Date()
         const swapBtn = document.getElementById("swapAccountsBtn");
 
         document.getElementById("transferForm").addEventListener("submit", (e) => {
-    if (fromSelect.value === toSelect.value) {
-        e.preventDefault();
-        alert("La cuenta de origen y destino no pueden ser la misma.");
-        return;
-    }
+        if (fromSelect.value === toSelect.value) {
+            e.preventDefault();
+            alert("La cuenta de origen y destino no pueden ser la misma.");
+            return;
+        }
 
-    const fromOption = fromSelect.selectedOptions[0];
-    const balance = parseFloat(fromOption?.dataset.balance || "0");
-    const amount = parseFloat(amountInput.value || "0");
+        const fromOption = fromSelect.selectedOptions[0];
+        const balance = parseFloat(fromOption?.dataset.balance || "0");
+        const amount = parseFloat(amountInput.value || "0");
 
-    if (amount > balance) {
-        e.preventDefault();
-        alert("Fondos insuficientes en la cuenta de origen.");
-        return;
-    }
-});
-
+        if (amount > balance) {
+            e.preventDefault();
+            alert("Fondos insuficientes en la cuenta de origen.");
+            return;
+        }
+        });
 
         // Función para actualizar opciones disponibles
         function updateOptions() {
@@ -440,34 +439,32 @@ const today = new Date()
         }
 
         // Evento de Intercambio
-swapBtn.addEventListener("click", () => {
-    const fromVal = fromSelect.value;
-    const toVal = toSelect.value;
+        swapBtn.addEventListener("click", () => {
+            const fromVal = fromSelect.value;
+            const toVal = toSelect.value;
 
-    fromSelect.value = toVal;
-    toSelect.value = fromVal;
+            fromSelect.value = toVal;
+            toSelect.value = fromVal;
 
-    // Rehabilitar todas las opciones antes de filtrar
-    Array.from(fromSelect.options).forEach(opt => {
-        opt.disabled = false;
-        opt.hidden = false;
-    });
-    Array.from(toSelect.options).forEach(opt => {
-        opt.disabled = false;
-        opt.hidden = false;
-    });
+            // Rehabilitar todas las opciones antes de filtrar
+            Array.from(fromSelect.options).forEach(opt => {
+                opt.disabled = false;
+                opt.hidden = false;
+            });
+            Array.from(toSelect.options).forEach(opt => {
+                opt.disabled = false;
+                opt.hidden = false;
+            });
 
-    updateUI();
+            updateUI();
 
-    swapBtn.classList.add("rotate-180");
-    setTimeout(() => swapBtn.classList.remove("rotate-180"), 300);
-});
-
-
-            // Animación visual
             swapBtn.classList.add("rotate-180");
             setTimeout(() => swapBtn.classList.remove("rotate-180"), 300);
         });
+
+        // Animación visual
+        swapBtn.classList.add("rotate-180");
+        setTimeout(() => swapBtn.classList.remove("rotate-180"), 300);
 
         fromSelect.addEventListener("change", updateUI);
         toSelect.addEventListener("change", updateUI);

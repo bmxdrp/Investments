@@ -59,9 +59,6 @@ export const POST: APIRoute = async (context) => {
 
         // Eliminar el rol
         await sql`DELETE FROM roles WHERE id = ${id}`;
-
-        console.log(`Role ${roleName} deleted by admin ${userId}`);
-
         return Response.redirect(new URL(`/admin/roles?success=${encodeURIComponent("Rol eliminado exitosamente")}`, context.request.url), 302);
 
     } catch (error) {

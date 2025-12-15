@@ -2,8 +2,8 @@
 // Sidebar.astro
 interface Props {
   activePage: string;
-  name: string;
-  user_type: string;
+  name: string | null;
+  user_type: string | null;
 }
 
 const { activePage, name, user_type } = Astro.props;
@@ -12,23 +12,23 @@ const { activePage, name, user_type } = Astro.props;
 // Si un archivo existe pero no está aquí, se generará genérico.
 const PAGE_METADATA: Record<
   string,
-  { name: string; icon: string; order: number }
+  { name: string; href: string; icon: string; order: number }
 > = {
-  "": { name: "Dashboard", icon: "dashboard", order: 1 },
-  accounts: { name: "Cuentas", icon: "accounts", order: 2 },
-  contribute: { name: "Aportes", icon: "contribute", order: 3 },
-  withdraw: { name: "Retiros", icon: "withdraw", order: 4 },
-  transfer: { name: "Transferencias", icon: "transfer", order: 5 },
-  performance: { name: "Rendimientos", icon: "performance", order: 6 },
-  history: { name: "Historial", icon: "history", order: 7 },
-  goals: { name: "Metas", icon: "goals", order: 8 },
-  alerts: { name: "Alertas", icon: "alerts", order: 9 },
-  // settings: { name: "Ajustes", icon: "settings", order: 99 },
+  dashboard: { name: "Dashboard", href: "/dashboard", icon: "dashboard", order: 1 },
+  accounts: { name: "Cuentas", href: "/dashboard/accounts", icon: "accounts", order: 2 },
+  contribute: { name: "Aportes", href: "/dashboard/contribute", icon: "contribute", order: 3 },
+  withdraw: { name: "Retiros", href: "/dashboard/withdraw", icon: "withdraw", order: 4 },
+  transfer: { name: "Transferencias", href: "/dashboard/transfer", icon: "transfer", order: 5 },
+  performance: { name: "Rendimientos", href: "/dashboard/performance", icon: "performance", order: 6 },
+  history: { name: "Historial", href: "/dashboard/history", icon: "history", order: 7 },
+  goals: { name: "Metas", href: "/dashboard/goals", icon: "goals", order: 8 },
+  alerts: { name: "Alertas", href: "/dashboard/alerts", icon: "alerts", order: 9 },
+  // settings: { name: "Ajustes", href: "/dashboard/settings", icon: "settings", order: 99 },
 };
   const menuItems = Object.entries(PAGE_METADATA).map(([page, meta]) => {
     return {
       name: meta.name,
-      href: `/dashboard/${page}`,
+      href: meta.href,
       icon: meta.icon,
       order: meta.order,
     };
@@ -77,9 +77,9 @@ const PAGE_METADATA: Record<
 </div>
 
 <!-- Sidebar: Zen Design -->
-<aside id="sidebar" class="lg:w-72 hidden lg:flex flex-col bg-white">
+<div id="sidebar" class="lg:w-60 h-dvh hidden lg:flex flex-col bg-white">
   <!-- Header Minimalista -->
-  <div class="flex items-center gap-4 px-8 py-8">
+  <div class="flex items-center gap-4 px-4 py-4">
     <div class="relative group">
       <div
         class="absolute -inset-1 bg-gradient-to-r from-blue-100 to-indigo-100 rounded-2xl blur-sm opacity-50 group-hover:opacity-100 transition duration-500"
@@ -101,19 +101,19 @@ const PAGE_METADATA: Record<
 
   <!-- Navigation -->
   <nav class="flex-1 overflow-y-auto overflow-x-hidden custom-scrollbar">
-    <ul class="space-y-1">
+    <ul class="space-y-2 px-4 mt-2">
       {
         menuItems.map((item: any) => {
-          const isActive = activePage === item.page;
+          const isActive = activePage == item.name;
           return (
             <li>
               <a
                 href={item.href}
-                class={`w-full group flex items-center gap-3.5 px-8 py-3 rounded-2xl transition-all duration-300 ease-out
+                class={`w-full group flex items-center gap-3.5 px-4 py-2.5 rounded-xl transition-all duration-300 ease-out
                 ${
                   isActive
-                    ? "bg-slate-900 text-white shadow-lg shadow-slate-900/20 translate-x-1"
-                    : "text-stone-500 hover:bg-stone-50 hover:text-stone-900 hover:translate-x-1"
+                    ? "bg-stone-200/70 text-stone-600 border border-stone-300 translate-x-1 py-3 scale-105"
+                    : "text-stone-500 hover:bg-stone-100 hover:text-stone-900 hover:translate-x-1"
                 }
               `}
               >
@@ -279,7 +279,7 @@ const PAGE_METADATA: Record<
                   )}
                 </div>
                 <span
-                  class={`font-medium tracking-wide transition-colors duration-300 ${isActive ? "text-white" : "group-hover:text-stone-900"}`}
+                  class={`font-medium tracking-wide transition-colors duration-300 ${isActive ? "text-stone-600" : "group-hover:text-stone-900"}`}
                 >
                   {item.name}
                 </span>
@@ -292,18 +292,13 @@ const PAGE_METADATA: Record<
   </nav>
 
   <!-- User Section (Static for now) -->
-  <div class="flex gap-2 justify-between items-center py-4 px-4 border-t border-stone-100">
+  <div class="flex gap-2 justify-between items-center py-3 px-3 border-t border-stone-100 w-full">
     <a
       href="/dashboard/settings"
       aria-label="Ajustes del perfil"
       title="Ajustes del perfil"
       class="flex flex-1 items-center gap-3 p-3 rounded-2xl bg-stone-50 hover:bg-stone-100 transition-colors cursor-pointer group"
     >
-      <div
-        class="w-10 h-10 rounded-full bg-gradient-to-tr from-stone-200 to-stone-300 flex items-center justify-center text-stone-600 font-bold group-hover:scale-105 transition-transform"
-      >
-        {name.charAt(0).toUpperCase()}
-      </div>
       <div class="flex-1 min-w-0">
         <p class="text-sm font-bold text-stone-900 truncate">{name}</p>
         <p class="text-xs text-stone-500 truncate">{user_type === "634690a7-0650-4932-a1cb-016d853af26a" ? "Free Account" : "Premium Account"}</p>
@@ -313,14 +308,14 @@ const PAGE_METADATA: Record<
       href="/auth/logout"
       aria-label="Cerrar Sesión"
       title="Cerrar Sesión"
-      class="flex items-center justify-center text-red-600 py-4 px-4 rounded-xl bg-red-100 hover:text-white hover:bg-red-600 transition-colors cursor-pointer"
+      class="flex items-center justify-center text-red-600 py-3 px-3 rounded-xl bg-red-100 hover:text-white hover:bg-red-600 transition-colors cursor-pointer"
       >
         <svg class="size-4" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg">
           <path d="m 8 0 c -0.550781 0 -1 0.449219 -1 1 v 5 c 0 0.550781 0.449219 1 1 1 s 1 -0.449219 1 -1 v -5 c 0 -0.550781 -0.449219 -1 -1 -1 z m -3.136719 1.816406 c -0.128906 0.015625 -0.253906 0.058594 -0.367187 0.125 c -2.734375 1.582032 -4.074219 4.816406 -3.257813 7.871094 c 0.820313 3.050781 3.59375 5.183594 6.75 5.1875 c 3.160157 0.003906 5.941407 -2.121094 6.765625 -5.167969 c 0.828125 -3.050781 -0.5 -6.289062 -3.230468 -7.878906 c -0.476563 -0.28125 -1.089844 -0.121094 -1.367188 0.359375 c -0.132812 0.226562 -0.171875 0.5 -0.105469 0.757812 c 0.070313 0.257813 0.234375 0.476563 0.464844 0.609376 c 1.957031 1.140624 2.902344 3.441406 2.3125 5.628906 c -0.59375 2.183594 -2.570313 3.695312 -4.832031 3.691406 c -2.265625 -0.003906 -4.238282 -1.519531 -4.824219 -3.707031 s 0.363281 -4.488281 2.324219 -5.621094 c 0.476562 -0.277344 0.640625 -0.886719 0.363281 -1.363281 c -0.132813 -0.230469 -0.347656 -0.398438 -0.605469 -0.464844 c -0.125 -0.035156 -0.257812 -0.042969 -0.390625 -0.027344 z m 0 0" fill="currentColor"/>
         </svg>
       </a>
   </div>
-</aside>
+</div>
 
 <script>
   // Mobile Menu Logic with Backdrop Blur
@@ -343,7 +338,7 @@ const PAGE_METADATA: Record<
         "inset-y-0",
         "left-0",
         "z-40",
-        "w-72",
+        "w-60",
         "shadow-2xl",
         "animate-slide-in",
       );
@@ -364,7 +359,7 @@ const PAGE_METADATA: Record<
         "inset-y-0",
         "left-0",
         "z-40",
-        "w-72",
+        "w-60",
         "shadow-2xl",
         "animate-slide-in",
       );

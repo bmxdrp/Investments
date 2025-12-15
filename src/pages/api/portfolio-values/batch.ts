@@ -2,7 +2,6 @@
 import type { APIRoute } from "astro";
 import { sql, setRLSUser } from "@lib/db";
 import { validateCsrf } from "@lib/csrf-validator";
-import { handleApiError } from "@lib/error-handler";
 
 export const POST: APIRoute = async (context) => {
   const { request, locals } = context;
@@ -102,7 +101,7 @@ export const POST: APIRoute = async (context) => {
             ${currency},
             ${newValue},
             ${usdToCopRate},
-            'Ajuste manual por lote'
+            'Ajuste manual'
           )
           RETURNING id
         `;

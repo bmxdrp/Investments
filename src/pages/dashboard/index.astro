@@ -12,12 +12,11 @@ if (!userId) {
 }
 
 // Obtener datos del dashboard
-let data;
+let data: any;
 try {
   data = await getDashboardData(userId);
 } catch (error) {
   console.error("Dashboard connection error:", error);
-  return Astro.redirect("/offline");
 }
 
 // Formatear números
@@ -36,7 +35,7 @@ const formatCOP = (value: number) => {
 };
 ---
 
-<Layout title="Dashboard" activePage="dashboard" name={name} user_type={userRole}>
+<Layout title="Dashboard" activePage="Dashboard" name={name} user_type={userRole}>
   <div class="max-w-7xl mx-auto space-y-6">
     <!-- Header -->
     <div>

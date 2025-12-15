@@ -56,8 +56,6 @@ export function validateEnv(): Env {
             CRON_SECRET: import.meta.env.CRON_SECRET,
             ROLE_ADMIN: import.meta.env.ROLE_ADMIN,
         });
-
-        console.log('✅ Variables de entorno validadas correctamente');
         return validatedEnv;
     } catch (error) {
         if (error instanceof z.ZodError) {

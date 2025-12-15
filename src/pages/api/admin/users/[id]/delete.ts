@@ -53,9 +53,6 @@ export const POST: APIRoute = async (context) => {
 
         // Eliminar el usuario
         await sql`DELETE FROM users WHERE id = ${id}`;
-
-        console.log(`User ${userToDelete[0].email} deleted by admin ${userId}`);
-
         return Response.redirect(new URL(`/admin/users?success=${encodeURIComponent("Usuario eliminado exitosamente")}`, context.request.url), 302);
 
     } catch (error) {

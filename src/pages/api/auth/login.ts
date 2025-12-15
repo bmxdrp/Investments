@@ -56,7 +56,6 @@ export const POST: APIRoute = async (context) => {
     }
 
     const found = user[0];
-    console.log(found);
 
     // Validar contraseña
     const valid = await argon2.verify(found.password_hash, parsed.password);
