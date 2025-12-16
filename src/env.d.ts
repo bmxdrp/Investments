@@ -4,8 +4,7 @@
 declare namespace App {
     interface Locals {
         userId: string | null;
-        name: string | null;
-        user_type: string | null;
+        userRoleId: string | null;
         csrfToken: string;
     }
 }

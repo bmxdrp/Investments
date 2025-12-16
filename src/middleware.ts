@@ -1,280 +1,149 @@
 import { defineMiddleware } from "astro:middleware";
 import { sql } from "@lib/db";
+import { getCookie, isRouteMatch } from "@lib/auth.utils";
 
-const PROTECTED_ROUTES = ["/dashboard", "/api"];
-const ADMIN_ROUTES = ["/admin"];
-const UNPROTECTED_ROUTES = [
-  "/api/auth/login", 
-  "/api/auth/register", 
-  "/api/cron/update-rate", 
-  "/api/auth/forgot-password", 
-  "/api/auth/reset-password", 
-  "/api/auth/verify-email"
+const PROTECTED = ["/dashboard", "/api"];
+const ADMIN = ["/admin"];
+const PUBLIC = [
+  "/api/auth/login",
+  "/api/auth/register",
+  "/api/cron/update-rate",
+  "/api/auth/forgot-password",
+  "/api/auth/reset-password",
+  "/api/auth/verify-email",
 ];
 
-// Cache de sesiones para reducir consultas a DB
-const sessionCache = new Map<string, { userId: string; expiresAt: Date }>();
-const CACHE_TTL = 120 * 60 * 1000; // 2 horas
-const cacheTimestamps = new Map<string, number>();
+const ADMIN_ROLE_ID = import.meta.env.ADMIN_ROLE_ID;
 
-function extractSessionId(cookieHeader: string): string | null {
-  const match = cookieHeader.match(/(?:^|; )session=([^;]+)/);
-  return match?.[1] ?? null;
-}
+type SessionData = {
+  userId: string;
+  userRoleId: string;
+  expiresAt: Date;
+};
 
-async function validateSession(sessionId: string): Promise<{ userId: string; expiresAt: Date } | null> {
-  // Verificar cache primero
+const cache = new Map<string, SessionData>();
+const cacheTTL = new Map<string, number>();
+const TTL = 24 * 60 * 60 * 1000; // cached for 24 hours
+
+async function validateSession(id: string): Promise<SessionData | null> {
   const now = Date.now();
-  const cachedTimestamp = cacheTimestamps.get(sessionId);
+  const cached = cache.get(id);
 
-  if (cachedTimestamp && now - cachedTimestamp < CACHE_TTL) {
-    const cached = sessionCache.get(sessionId);
-    if (cached && cached.expiresAt > new Date()) {
-      return { userId: cached.userId, expiresAt: cached.expiresAt };
-    }
+  if (cached && now - (cacheTTL.get(id) ?? 0) < TTL && cached.expiresAt > new Date()) {
+    return cached;
   }
 
-  // Consultar base de datos con JOIN para obtener el rol
-  try {
-    const rows = await sql`
-      SELECT s.user_id, s.expires_at, s.name, s.role_id as role_name
-      FROM sessions s
-      LEFT JOIN users u ON s.user_id = u.id
-      LEFT JOIN roles r ON u.role_id = r.id
-      WHERE s.id = ${sessionId}
-      LIMIT 1
-    `;
+  const rows = await sql`
+    SELECT s.user_id, s.expires_at, r.id AS role_id
+    FROM sessions s
+    JOIN users u ON s.user_id = u.id
+    JOIN roles r ON u.role_id = r.id
+    WHERE s.id = ${id}
+    LIMIT 1
+  `;
 
-    if (rows.length === 0) {
-      sessionCache.delete(sessionId);
-      cacheTimestamps.delete(sessionId);
-      return null;
-    }
+  if (!rows.length) return null;
 
-    const session = rows[0];
-    const expiresAt = new Date(session.expires_at);
+  const expiresAt = new Date(rows[0].expires_at);
+  if (expiresAt <= new Date()) return null;
 
-    if (expiresAt <= new Date()) {
-      // Sesión expirada, limpiar de DB de forma asíncrona
-      sql`DELETE FROM sessions WHERE id = ${sessionId}`.catch(() => { });
-      sessionCache.delete(sessionId);
-      cacheTimestamps.delete(sessionId);
-      return null;
-    }
+  const session: SessionData = {
+    userId: rows[0].user_id,
+    userRoleId: rows[0].role_id,
+    expiresAt,
+  };
 
-    // Actualizar cache
-    const sessionData = {
-      userId: session.user_id,
-      userRole: session.role_name || null,
-      name: session.name,
-      expiresAt,
-    };
+  cache.set(id, session);
+  cacheTTL.set(id, now);
 
-    sessionCache.set(sessionId, sessionData);
-    cacheTimestamps.set(sessionId, now);
-
-    return { userId: session.user_id, expiresAt: session.expires_at };
-  } catch (error) {
-    console.error("Error validating session:", error);
-    return null;
-  }
+  return session;
 }
 
-function isProtectedRoute(path: string): boolean {
-  // Verificar primero las rutas no protegidas (más específicas)
-  if (UNPROTECTED_ROUTES.some((route) => path.startsWith(route))) {
-    return false;
-  }
-
-  // Luego verificar las rutas protegidas
-  return PROTECTED_ROUTES.some((route) => path.startsWith(route));
-}
-
-function isAdminRoute(path: string): boolean {
-  return ADMIN_ROUTES.some((route) => path.startsWith(route));
-}
-
-function createRedirectResponse(returnTo: string, baseUrl: URL): Response {
-  const encoded = encodeURIComponent(returnTo);
-  const redirectUrl = new URL(`/auth/login?returnTo=${encoded}`, baseUrl);
-
-  return new Response(null, {
-    status: 302,
-    headers: {
-      Location: redirectUrl.toString(),
-    },
-  });
-}
-
-function createForbiddenResponse(baseUrl: URL): Response {
-  const redirectUrl = new URL("/403", baseUrl);
-
-  return new Response(null, {
-    status: 302,
-    headers: {
-      Location: redirectUrl.toString(),
-    },
-  });
-}
-
-export const onRequest = defineMiddleware(async (ctx, next) => {
-  const { request, locals, url } = ctx;
-
-  // Inicializar userId y userRole
-  locals.userId = null;
-  locals.userRole = null;
-  locals.name = null;
-
-  // Gestionar token CSRF (Persistente vía Cookie)
-  const { generateCsrfToken } = await import('@lib/csrf');
-
-  // Intentar leer token existente de la cookie
-  const cookies = request.headers.get("cookie") || "";
-  const csrfCookieMatch = cookies.match(/(?:^|; )csrf-token=([^;]+)/);
-  let csrfToken = csrfCookieMatch?.[1];
-
-  // Si no existe o es inválido, generar uno nuevo
-  if (!csrfToken) {
-    csrfToken = generateCsrfToken();
-  }
-
-  locals.csrfToken = csrfToken;
-
-  // Extraer sessionId de cookies
-  const cookieHeader = request.headers.get("cookie") || "";
-  const sessionId = extractSessionId(cookieHeader);
-
-  // Validar sesión si existe
-  if (sessionId) {
-    const sessionData = await validateSession(sessionId);
-    if (sessionData) {
-      locals.userId = sessionData.userId;
-    }
-  }
-
-  // Verificar protección de ruta
+export const onRequest = defineMiddleware(async ({ request, locals, url }, next) => {
+  const cookies = request.headers.get("cookie") ?? "";
   const path = url.pathname;
 
-  // Verificar si la ruta requiere autenticación
-  if (isProtectedRoute(path) && !locals.userId) {
-    return createRedirectResponse(path, url);
+  locals.userId = null;
+  locals.userRoleId = null;
+
+  // ========= AUTH =========
+  const sessionId = getCookie("session", cookies);
+  if (sessionId) {
+    const session = await validateSession(sessionId);
+    if (session) {
+      locals.userId = session.userId;
+      locals.userRoleId = session.userRoleId;
+    }
   }
 
-  // Verificar si la ruta requiere rol de administrador
-  if (isAdminRoute(path) && locals.userRole !== 'admin') {
-    console.log(`Access denied to ${path} for user ${locals.userId}`);
-    return createForbiddenResponse(url);
-  }
-
-  // Continuar con la petición
-  const response = await next();
-
-  // ========================================
-  // ✅ SOLUCIÓN: CLONAR LA RESPUESTA PARA PODER MODIFICAR HEADERS
-  // ========================================
-  const newResponse = new Response(response.body, {
-    status: response.status,
-    statusText: response.statusText,
-    headers: new Headers(response.headers), // Clonar headers
-  });
-
-  // Guardar/Renovar cookie CSRF
-  if (locals.csrfToken) {
-    newResponse.headers.append('Set-Cookie', `csrf-token=${locals.csrfToken}; Path=/; HttpOnly; SameSite=Lax; Max-Age=3600`); // 1 hora
-  }
-
-  // ========================================
-  // SECURITY HEADERS
-  // ========================================
-
-  // Prevenir clickjacking - no permitir que el sitio sea embebido en iframes
-  newResponse.headers.set('X-Frame-Options', 'DENY');
-
-  // Prevenir MIME type sniffing
-  newResponse.headers.set('X-Content-Type-Options', 'nosniff');
-
-  // Habilitar protección XSS del navegador (legacy, pero útil para navegadores antiguos)
-  newResponse.headers.set('X-XSS-Protection', '1; mode=block');
-
-  // Controlar qué información de referrer se envía
-  newResponse.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
-
-  // Forzar HTTPS en producción (HSTS)
-  if (import.meta.env.PROD) {
-    newResponse.headers.set(
-      'Strict-Transport-Security',
-      'max-age=31536000; includeSubDomains; preload'
+  if (!isRouteMatch(path, PUBLIC) && isRouteMatch(path, PROTECTED) && !locals.userId) {
+    return Response.redirect(
+      new URL(`/auth/login?returnTo=${encodeURIComponent(path)}`, url),
+      302
     );
   }
 
-  // Controlar permisos de APIs del navegador
-  newResponse.headers.set(
-    'Permissions-Policy',
-    'geolocation=(), microphone=(), camera=(), payment=(), usb=(), magnetometer=(), gyroscope=()'
+  if (isRouteMatch(path, ADMIN) && locals.userRoleId !== ADMIN_ROLE_ID) {
+    return Response.redirect(new URL("/403", url), 302);
+  }
+
+  // ========= CSRF =========
+  const { generateCsrfToken } = await import("@lib/csrf");
+  locals.csrfToken ||= getCookie("csrf-token", cookies) ?? generateCsrfToken();
+
+  const response = await next();
+  const headers = new Headers(response.headers);
+
+  headers.append(
+    "Set-Cookie",
+    `csrf-token=${locals.csrfToken}; Path=/; HttpOnly; SameSite=Lax; Max-Age=3600`
   );
 
-  // Content Security Policy (CSP)
-  const cspDirectives = [
-    "default-src 'self'",
-    "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
-    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
-    "font-src 'self' https://fonts.gstatic.com",
-    "img-src 'self' data: https: blob:",
-    "connect-src 'self'",
-    "frame-ancestors 'none'",
-    "base-uri 'self'",
-    "form-action 'self'",
-  ];
-  newResponse.headers.set('Content-Security-Policy', cspDirectives.join('; '));
+  // ========= SECURITY HEADERS =========
+  headers.set("X-Frame-Options", "DENY");
+  headers.set("X-Content-Type-Options", "nosniff");
+  headers.set("X-XSS-Protection", "1; mode=block");
+  headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
+  headers.set(
+    "Permissions-Policy",
+    "geolocation=(), microphone=(), camera=(), payment=()"
+  );
 
-  // ========================================
-  // CORS CONFIGURATION
-  // ========================================
-
-  const origin = request.headers.get('origin');
-
-  // Lista de orígenes permitidos
-  const allowedOrigins = [
-    'http://localhost:4321',
-    'http://localhost:3000',
-    'https://yourdomain.com',
-    'https://www.yourdomain.com',
-  ];
-
-  // En desarrollo, permitir localhost
-  if (import.meta.env.DEV && origin?.includes('localhost')) {
-    newResponse.headers.set('Access-Control-Allow-Origin', origin);
-    newResponse.headers.set('Access-Control-Allow-Credentials', 'true');
-    newResponse.headers.set('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-    newResponse.headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-  }
-  // En producción, solo permitir orígenes específicos
-  else if (origin && allowedOrigins.includes(origin)) {
-    newResponse.headers.set('Access-Control-Allow-Origin', origin);
-    newResponse.headers.set('Access-Control-Allow-Credentials', 'true');
-    newResponse.headers.set('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-    newResponse.headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  if (import.meta.env.PROD) {
+    headers.set(
+      "Strict-Transport-Security",
+      "max-age=31536000; includeSubDomains; preload"
+    );
   }
 
-  // Manejar preflight requests (OPTIONS)
-  if (request.method === 'OPTIONS') {
-    return new Response(null, {
-      status: 204,
-      headers: newResponse.headers,
-    });
+  headers.set(
+    "Content-Security-Policy",
+    [
+      "default-src 'self'",
+      "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
+      "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+      "font-src 'self' https://fonts.gstatic.com",
+      "img-src 'self' data: https blob:",
+      "frame-ancestors 'none'",
+    ].join("; ")
+  );
+
+  // ========= CORS =========
+  const origin = request.headers.get("origin");
+  if (origin && (import.meta.env.DEV || origin.includes("yourdomain.com"))) {
+    headers.set("Access-Control-Allow-Origin", origin);
+    headers.set("Access-Control-Allow-Credentials", "true");
+    headers.set("Access-Control-Allow-Methods", "GET,POST,PUT,DELETE,OPTIONS");
+    headers.set("Access-Control-Allow-Headers", "Content-Type, Authorization");
   }
 
-  return newResponse;
+  if (request.method === "OPTIONS") {
+    return new Response(null, { status: 204, headers });
+  }
+
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers,
+  });
 });
-
-// Función de utilidad para limpiar cache periódicamente (opcional)
-export function clearExpiredCache(): void {
-  const now = Date.now();
-
-  for (const [sessionId, timestamp] of cacheTimestamps.entries()) {
-    if (now - timestamp > CACHE_TTL) {
-      sessionCache.delete(sessionId);
-      cacheTimestamps.delete(sessionId);
-    }
-  }
-}

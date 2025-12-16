@@ -1,19 +1,20 @@
 ---
 // Sidebar.astro
+import { getUser } from "@lib/db";
+
+const userId = Astro.locals.userId;
+if (!userId) {
+  throw new Error("Usuario no autenticado");
+}
+const user = await getUser(userId);
+const { name, role } = user;
 interface Props {
   activePage: string;
-  name: string | null;
-  user_type: string | null;
 }
 
-const { activePage, name, user_type } = Astro.props;
+const { activePage} = Astro.props;
 
-// 1. Definir metadatos conocidos (Orden, Iconos, Títulos)
-// Si un archivo existe pero no está aquí, se generará genérico.
-const PAGE_METADATA: Record<
-  string,
-  { name: string; href: string; icon: string; order: number }
-> = {
+const PAGE_METADATA: Record<string,{ name: string; href: string; icon: string; order: number }> = {
   dashboard: { name: "Dashboard", href: "/dashboard", icon: "dashboard", order: 1 },
   accounts: { name: "Cuentas", href: "/dashboard/accounts", icon: "accounts", order: 2 },
   contribute: { name: "Aportes", href: "/dashboard/contribute", icon: "contribute", order: 3 },
@@ -75,14 +76,17 @@ const PAGE_METADATA: Record<
   class="fixed inset-0 bg-stone-900/40 backdrop-blur-sm z-40 lg:hidden hidden transition-opacity duration-300"
 >
 </div>
-
 <!-- Sidebar: Zen Design -->
-<div id="sidebar" class="lg:w-60 h-dvh hidden lg:flex flex-col bg-white">
+<div 
+  id="sidebar" 
+  class="lg:w-60 h-dvh hidden lg:flex flex-col bg-white border-r border-stone-200"
+  style="background-image: radial-gradient(circle at top right,rgba(255,182,153,.1),rgba(255,244,214,.5));backdrop-filter: blur(30px);"
+  >  
   <!-- Header Minimalista -->
   <div class="flex items-center gap-4 px-4 py-4">
     <div class="relative group">
       <div
-        class="absolute -inset-1 bg-gradient-to-r from-blue-100 to-indigo-100 rounded-2xl blur-sm opacity-50 group-hover:opacity-100 transition duration-500"
+        class="absolute -inset-1 bg-linear-to-r from-blue-100 to-indigo-100 rounded-2xl blur-sm opacity-50 group-hover:opacity-100 transition duration-500"
       >
       </div>
       <img
@@ -101,6 +105,23 @@ const PAGE_METADATA: Record<
 
   <!-- Navigation -->
   <nav class="flex-1 overflow-y-auto overflow-x-hidden custom-scrollbar">
+    {role === "Premium Account" && 
+          <div class="border-b border-stone-300 pb-2 w-11/12 mx-auto">
+        <ul class="space-y-1">
+          <li>
+            <a
+              href="/admin"
+              class="flex items-center gap-1.5 px-2 py-3 rounded-xl text-stone-600 hover:bg-stone-200/70 transition-colors border border-transparent"
+            >
+              <svg fill="currentColor" stroke="currentColor" stroke-width="2" class="size-4.5" viewBox="0 0 1920 1920" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M276.941 440.584v565.722c0 422.4 374.174 625.468 674.71 788.668l8.02 4.292 8.131-4.292c300.537-163.2 674.71-366.268 674.71-788.668V440.584l-682.84-321.657L276.94 440.584Zm682.73 1479.529c-9.262 0-18.523-2.372-26.993-6.89l-34.9-18.974C588.095 1726.08 164 1495.906 164 1006.306V404.78c0-21.91 12.65-41.788 32.414-51.162L935.727 5.42c15.134-7.228 32.866-7.228 48 0l739.313 348.2c19.765 9.374 32.414 29.252 32.414 51.162v601.525c0 489.6-424.207 719.774-733.779 887.943l-34.899 18.975c-8.47 4.517-17.731 6.889-27.105 6.889Zm467.158-547.652h-313.412l-91.595-91.482v-83.803H905.041v-116.78h-83.69l-58.503-58.504c-1.92.113-3.84.113-5.76.113-176.075 0-319.285-143.21-319.285-319.285 0-176.075 143.21-319.398 319.285-319.398 176.075 0 319.285 143.323 319.285 319.398 0 1.92 0 3.84-.113 5.647l350.57 350.682v313.412Zm-266.654-112.941h153.713v-153.713L958.462 750.155l3.953-37.27c1.017-123.897-91.595-216.621-205.327-216.621S550.744 588.988 550.744 702.72c0 113.845 92.612 206.344 206.344 206.344l47.21-5.309 63.811 63.7h149.873v116.78h116.781v149.986l25.412 25.299Zm-313.4-553.57c0 46.758-37.949 84.706-84.706 84.706-46.758 0-84.706-37.948-84.706-84.706s37.948-84.706 84.706-84.706c46.757 0 84.706 37.948 84.706 84.706" fill-rule="evenodd"/>
+              </svg>
+              <span>Panel de Administrador</span>
+            </a>
+          </li>
+        </ul>
+      </div>
+  }
     <ul class="space-y-2 px-4 mt-2">
       {
         menuItems.map((item: any) => {
@@ -292,23 +313,23 @@ const PAGE_METADATA: Record<
   </nav>
 
   <!-- User Section (Static for now) -->
-  <div class="flex gap-2 justify-between items-center py-3 px-3 border-t border-stone-100 w-full">
+  <div class="flex gap-2 justify-between items-center py-3.5 px-3 border-t border-black/10 w-full">
     <a
       href="/dashboard/settings"
       aria-label="Ajustes del perfil"
       title="Ajustes del perfil"
-      class="flex flex-1 items-center gap-3 p-3 rounded-2xl bg-stone-50 hover:bg-stone-100 transition-colors cursor-pointer group"
+      class="flex flex-1 items-center gap-3 p-3 rounded-2xl bg-orange-100 hover:bg-orange-200 transition-colors cursor-pointer group"
     >
       <div class="flex-1 min-w-0">
         <p class="text-sm font-bold text-stone-900 truncate">{name}</p>
-        <p class="text-xs text-stone-500 truncate">{user_type === "634690a7-0650-4932-a1cb-016d853af26a" ? "Free Account" : "Premium Account"}</p>
+        <p class="text-xs text-stone-550 truncate">{role}</p>
       </div>
     </a>
     <a
       href="/auth/logout"
       aria-label="Cerrar Sesión"
       title="Cerrar Sesión"
-      class="flex items-center justify-center text-red-600 py-3 px-3 rounded-xl bg-red-100 hover:text-white hover:bg-red-600 transition-colors cursor-pointer"
+      class="flex items-center justify-center text-red-600 p-4.5 rounded-xl bg-red-100 hover:text-white hover:bg-red-600 transition-colors cursor-pointer"
       >
         <svg class="size-4" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg">
           <path d="m 8 0 c -0.550781 0 -1 0.449219 -1 1 v 5 c 0 0.550781 0.449219 1 1 1 s 1 -0.449219 1 -1 v -5 c 0 -0.550781 -0.449219 -1 -1 -1 z m -3.136719 1.816406 c -0.128906 0.015625 -0.253906 0.058594 -0.367187 0.125 c -2.734375 1.582032 -4.074219 4.816406 -3.257813 7.871094 c 0.820313 3.050781 3.59375 5.183594 6.75 5.1875 c 3.160157 0.003906 5.941407 -2.121094 6.765625 -5.167969 c 0.828125 -3.050781 -0.5 -6.289062 -3.230468 -7.878906 c -0.476563 -0.28125 -1.089844 -0.121094 -1.367188 0.359375 c -0.132812 0.226562 -0.171875 0.5 -0.105469 0.757812 c 0.070313 0.257813 0.234375 0.476563 0.464844 0.609376 c 1.957031 1.140624 2.902344 3.441406 2.3125 5.628906 c -0.59375 2.183594 -2.570313 3.695312 -4.832031 3.691406 c -2.265625 -0.003906 -4.238282 -1.519531 -4.824219 -3.707031 s 0.363281 -4.488281 2.324219 -5.621094 c 0.476562 -0.277344 0.640625 -0.886719 0.363281 -1.363281 c -0.132813 -0.230469 -0.347656 -0.398438 -0.605469 -0.464844 c -0.125 -0.035156 -0.257812 -0.042969 -0.390625 -0.027344 z m 0 0" fill="currentColor"/>

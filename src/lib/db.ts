@@ -29,3 +29,29 @@ export async function setRLSUser(userId: string) {
   // Usar sql`` con parámetros
   await sql`SELECT set_config('app.user_id', ${userId}, false)`;
 }
+
+export type UserInfo = {
+  name: string;
+  role: "Free Account" | "Premium Account";
+};
+
+export async function getUser(id: string): Promise<UserInfo> {
+  const result = await sql`
+    SELECT name, role_id
+    FROM users
+    WHERE id = ${id}
+    LIMIT 1
+  `;
+
+  if (!result.length) {
+    throw new Error("Usuario no encontrado");
+  }
+
+  return {
+    name: result[0].name,
+    role: result[0].role_id === import.meta.env.ADMIN_ROLE_ID
+      ? "Premium Account"
+      : "Free Account",
+  };
+}
+

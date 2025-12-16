@@ -7,8 +7,6 @@ interface Props {
   activePage: string;
   description?: string;
   noIndex?: boolean;
-  name: string | null;
-  user_type: string | null;
 }
 
 const {
@@ -16,8 +14,6 @@ const {
   activePage,
   description = "Panel de control de inversiones - Capyte",
   noIndex = true,
-  name,
-  user_type,
 } = Astro.props;
 ---
 <!doctype html>
@@ -28,7 +24,6 @@ const {
 
     <title>{title}</title>
     <meta name="description" content={description} />
-
     {noIndex && <meta name="robots" content="noindex, nofollow" />}
 
     <link rel="icon" type="image/png" href="/logo.png" />
@@ -51,23 +46,12 @@ const {
         animation: fadeInUp 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
       }
 
-      .stagger-1 {
-        animation-delay: 50ms;
-      }
-      .stagger-2 {
-        animation-delay: 100ms;
-      }
-      .stagger-3 {
-        animation-delay: 150ms;
-      }
-      .stagger-4 {
-        animation-delay: 200ms;
-      }
-      .stagger-5 {
-        animation-delay: 250ms;
-      }
+      .stagger-1 { animation-delay: 50ms; }
+      .stagger-2 { animation-delay: 100ms; }
+      .stagger-3 { animation-delay: 150ms; }
+      .stagger-4 { animation-delay: 200ms; }
+      .stagger-5 { animation-delay: 250ms; }
 
-      /* Smooth inputs transition */
       input,
       select,
       textarea,
@@ -80,13 +64,9 @@ const {
         transition-duration: 200ms;
       }
 
-      /* Custom Scrollbar for Zen look */
       ::-webkit-scrollbar {
         width: 8px;
         height: 8px;
-      }
-      ::-webkit-scrollbar-track {
-        background: transparent;
       }
       ::-webkit-scrollbar-thumb {
         background: #d6d3d1;
@@ -97,24 +77,45 @@ const {
       }
     </style>
   </head>
-  <body
-    class="min-h-dvh bg-stone-50 text-stone-900 font-sans antialiased selection:bg-blue-100 selection:text-blue-900"
-  >
-    <div class="flex flex-row justify-between min-h-dvh w-full relative">
-      <aside
-        class="lg:w-60 h-dvh fixed top-0 left-0 bg-white border-r border-stone-100 z-50"
-      >
-        <Sidebar activePage={activePage} name={name} user_type={user_type} />
-      </aside>
 
-      <main
-        class="flex-1 w-full lg:ml-72 p-6 lg:p-12 pt-20 lg:pt-12 min-h-dvh"
-        transition:animate="slide"
-      >
-        <div class="max-w-6xl mx-auto animate-zen-fade-up">
+  <body class="min-h-dvh bg-stone-50 text-stone-900 font-sans antialiased selection:bg-blue-100 selection:text-blue-900" style="background-image:radial-gradient(circle at 20% 80%, rgba(255,182,153,.3) 0%, transparent 50%),radial-gradient(circle at 80% 20%, rgba(255,244,214,.5) 0%, transparent 50%),radial-gradient(circle at 40% 40%, rgba(255,182,153,.1) 0%, transparent 50%)">
+    <!-- ASIDE -->
+    <aside class="fixed inset-y-0 rigth-0 z-40 w-60 transition-transform duration-300">
+      <Sidebar activePage={activePage} />
+    </aside>
+    <!-- CONTENT -->
+    <div class="ml-0 lg:ml-60 flex min-h-dvh flex-col transition-[margin] duration-300">
+      <!-- MAIN -->
+      <main class="flex-1 p-6">
+        <div class="mx-auto max-w-6xl animate-zen-fade-up">
           <slot />
         </div>
       </main>
+      <!-- FOOTER (ligado al content) -->
+      <footer
+      class="py-3 md:py-6 px-4 sm:px-6 lg:px-8 border-t border-stone-300 bg-stone-200"
+      style="background-image:radial-gradient(circle at 20% 80%, rgba(255,182,153,.3) 0%, transparent 50%),radial-gradient(circle at 80% 20%, rgba(255,244,214,.5) 0%, transparent 50%),radial-gradient(circle at 40% 40%, rgba(255,182,153,.1) 0%, transparent 50%)"    >
+
+      <div
+        class="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-6"
+      >
+        <div class="flex items-center gap-3">
+          <div
+            class="size-10 rounded-lg flex items-center justify-center drop-shadow-sm/30"
+          >
+            <img
+        src="/logo.png"
+        alt="Capyte"
+        class="relative rounded-xl shadow-sm bg-white p-1"
+      />
+          </div>
+          <span class="text-lg font-bold text-stone-600">Capyte</span>
+        </div>
+        <p class="text-sm text-stone-600">
+          © 2025 Capyte. Construido con solidez y calma.
+        </p>
+      </div>
+     </footer>
     </div>
   </body>
 </html>
