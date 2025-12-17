@@ -2,9 +2,7 @@ import type { APIRoute } from "astro";
 import { sql } from "@lib/db";
 import { processExchangeRateAlerts } from "@lib/alerts";
 
-// 🔄 Shared logic for updating the exchange rate
 async function updateExchangeRate() {
-  // 1️⃣ Fetch USD → COP rate and store it
   const apiKey = import.meta.env.CURRENCY_API_KEY;
   if (!apiKey) {
     throw new Error("CURRENCY_API_KEY no está configurada");
@@ -34,17 +32,14 @@ async function updateExchangeRate() {
   `;
 
   // 🔔 Trigger Alerts
-  // Executamos de forma asíncrona pero esperamos para el log, o fire-and-forget
   try {
     await processExchangeRateAlerts(rate);
   } catch (e) {
     console.error("Error processing alerts:", e);
   }
-
   return { success: true, rate, date: today };
 }
 
-// 📥 GET handler - reads token from query params
 export const GET: APIRoute = async ({ url }) => {
   try {
     await updateExchangeRate();
