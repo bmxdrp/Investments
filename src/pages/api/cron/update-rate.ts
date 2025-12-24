@@ -19,16 +19,15 @@ async function updateExchangeRate() {
     throw new Error("No se pudo obtener USD → COP");
   }
 
-  const today = new Date().toLocaleDateString("en-CA", {
-    timeZone: "America/Bogota",
-  });
+  const today = new Date().toLocaleString("sv-SE", {
+  timeZone: "America/Bogota",
+});
+  console.log(today);
 
   // ✅ UPSERT seguro
   await sql`
     INSERT INTO exchange_rates (date, usd_to_cop, notes)
-    VALUES (${today}, ${rate}, 'Cron job')
-    ON CONFLICT (date) DO UPDATE SET
-      usd_to_cop = ${rate};
+    VALUES (${today}, ${rate}, 'Cron');
   `;
 
   // 🔔 Trigger Alerts
