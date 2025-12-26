@@ -22,8 +22,9 @@ const PAGE_METADATA: Record<string,{ name: string; href: string; icon: string; o
   transfer: { name: "Transferencias", href: "/dashboard/transfer", icon: "transfer", order: 5 },
   performance: { name: "Rendimientos", href: "/dashboard/performance", icon: "performance", order: 6 },
   history: { name: "Historial", href: "/dashboard/history", icon: "history", order: 7 },
-  goals: { name: "Metas", href: "/dashboard/goals", icon: "goals", order: 8 },
-  alerts: { name: "Alertas", href: "/dashboard/alerts", icon: "alerts", order: 9 },
+  statistics: { name: "Estadísticas", href: "/dashboard/statistics", icon: "statistics", order: 8 },
+  goals: { name: "Metas", href: "/dashboard/goals", icon: "goals", order: 9 },
+  alerts: { name: "Alertas", href: "/dashboard/alerts", icon: "alerts", order: 10 },
   // settings: { name: "Ajustes", href: "/dashboard/settings", icon: "settings", order: 99 },
 };
   const menuItems = Object.entries(PAGE_METADATA).map(([page, meta]) => {
@@ -297,6 +298,12 @@ const PAGE_METADATA: Record<string,{ name: string; href: string; icon: string; o
                         d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
                       />
                     </svg>
+                  )}
+                  {item.icon === "statistics" && (
+                    <svg xmlns="http://www.w3.org/2000/svg" class="size-5" viewBox="0 0 24 24">
+                        <path fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 2a10 10 0 1 0 10 10H12Z"/>
+                        <path fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 9h6.54A10 10 0 0 0 15 2.46Z"/>
+                        </svg>
                   )}
                 </div>
                 <span
