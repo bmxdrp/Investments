@@ -2,6 +2,7 @@
 import Layout from "@layouts/default.astro";
 import { sql, setRLSUser } from "@lib/db";
 import { getLatestExchangeRate } from "@lib/finance";
+import CsrfField from "@components/CsrfField.astro";
 
 const {userId} = Astro.locals;
 if (!userId) {
@@ -116,6 +117,7 @@ const today = new Date()
                 class="p-6 space-y-6"
                 id="transferForm"
             >
+                <CsrfField />
                 <input type="hidden" name="usd_to_cop" value={currentRate} />
                 <!-- Cuentas -->
                 <div
