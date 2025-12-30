@@ -3,7 +3,7 @@ import Layout from "@layouts/default.astro";
 import { sql, setRLSUser } from "@lib/db";
 import { getLatestExchangeRate } from "@lib/finance";
 
-const {userId, name, userRole} = Astro.locals;
+const {userId} = Astro.locals;
 if (!userId) {
     return Astro.redirect("/auth/login?returnTo=/dashboard/transfer");
 }
@@ -24,7 +24,7 @@ LEFT JOIN LATERAL (
   WHERE t.account_id = a.id
   AND t.user_id = ${userId}
   ORDER BY 
-    t.date ASC,
+    t.date DESC,
     CASE 
       WHEN t.type = 'initial_balance' THEN 1
       ELSE 0
@@ -53,7 +53,7 @@ const today = new Date()
     .join("-");
 ---
 
-<Layout title="Transferir Fondos" activePage="Transferencias" name={name} user_type={userRole}>
+<Layout title="Transferir Fondos" activePage="Transferencias">
     <div class="max-w-2xl mx-auto">
         <div class="mb-8">
             <h1 class="text-3xl font-bold text-gray-900">Transferir Fondos</h1>
