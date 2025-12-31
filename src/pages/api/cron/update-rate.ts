@@ -22,7 +22,6 @@ async function updateExchangeRate() {
   const today = new Date().toLocaleString("sv-SE", {
   timeZone: "America/Bogota",
 });
-  console.log(today);
 
   // ✅ UPSERT seguro
   await sql`
