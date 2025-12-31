@@ -301,10 +301,10 @@ const getTypeLabel = (type: string) => {
                         <div class="flex-1 min-w-0">
                           <div class="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-3">
                             <p class="font-semibold text-sm sm:text-base text-gray-900 capitalize">
-                              {getTypeLabel(mov.type)}
+                              {mov.account_name}
                             </p>
                             <span class="text-xs px-2 py-0.5 sm:py-1 bg-gray-100 text-gray-600 rounded-full font-medium w-fit">
-                              {mov.account_name}
+                              {getTypeLabel(mov.type)}
                             </span>
                           </div>
                           <div class="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-4 mt-1">

@@ -1,9 +1,5 @@
 import { sql, setRLSUser } from "@lib/db";
 
-// ==========================================
-// TIPOS Y UTILIDADES
-// ==========================================
-
 export interface Transaction {
   type: string;
   amount: number;
@@ -28,8 +24,8 @@ export interface PortfolioMetrics {
 
 export const formatCurrency = (value: number, currency: string = "COP") => {
   return value.toLocaleString("es-CO", {
-    minimumFractionDigits: currency === "USD" ? 2 : 0,
-    maximumFractionDigits: currency === "USD" ? 2 : 0,
+    minimumFractionDigits: currency === "USD" ? 1 : 1,
+    maximumFractionDigits: currency === "USD" ? 2 : 2,
   });
 };
 
@@ -208,6 +204,7 @@ export async function getDashboardData(userId: string) {
     const val = Number(t.amount);
     const rate = t.usd_to_cop_rate ? Number(t.usd_to_cop_rate) : currentRate;
     const valCOP = t.currency === "USD" ? val * rate : val;
+    const difference = t.new_value - t.previous_value;
     const isMonth = new Date(t.date).getMonth() === now.getMonth() && new Date(t.date).getFullYear() === now.getFullYear();
 
     if (['initial_balance', 'contribution', 'income'].includes(t.type)) {
@@ -223,6 +220,7 @@ export async function getDashboardData(userId: string) {
       id: t.id,
       type: t.type,
       amount: val,
+      difference,
       currency: t.currency,
       date: t.date,
       note: t.notes
