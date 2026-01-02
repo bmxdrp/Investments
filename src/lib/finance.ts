@@ -506,7 +506,7 @@ export async function getDetailedPortfolioStats(userId: string, periodDays: numb
   };
 }
 
-export async function registerContribution(data: any) {
+export async function registerAccountValue(data: any) {
   await setRLSUser(data.user_id);
   const last = await sql`SELECT new_value FROM transactions WHERE account_id=${data.account_id} ORDER BY date DESC, created_at DESC LIMIT 1`;
   const prev = last.length ? Number(last[0].new_value) : 0;
