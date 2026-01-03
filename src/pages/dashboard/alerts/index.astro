@@ -5,10 +5,10 @@ import {
     toggleAlert,
     deleteAlert,
     createAlert,
-} from "@lib/alerts-manager";
+} from "@lib/alerts";
 import { getLatestExchangeRate } from "@lib/finance";
 
-const {userId, name, userRole} = Astro.locals;
+const {userId} = Astro.locals;
 if (!userId) return Astro.redirect("/auth/login");
 
 // Obtener tasa actual para referencia
@@ -47,7 +47,7 @@ if (Astro.request.method === "POST") {
 const alerts = await getUserAlerts(userId);
 ---
 
-<Layout title="Alertas" activePage="Alertas" name={name} user_type={userRole}>
+<Layout title="Alertas" activePage="Alertas">
     <div class="max-w-4xl mx-auto space-y-6">
         <div class="flex items-center justify-between">
             <div>

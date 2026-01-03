@@ -1,10 +1,16 @@
 // src/lib/dashboard-charts.ts
 import { sql } from "@lib/db";
 
-export async function getPortfolioHistory(userId: string) {
-    // Obtener tasa actual para fallback
+/**
+ * Obtiene la tasa de cambio USD a COP más reciente
+ */
+async function getCurrentUsdToCopRate(): Promise<number> {
     const rateRows = await sql`SELECT usd_to_cop FROM exchange_rates ORDER BY date DESC LIMIT 1;`;
-    const currentUsdToCop = Number(rateRows[0]?.usd_to_cop ?? 0);
+    return Number(rateRows[0]?.usd_to_cop ?? 0);
+}
+
+export async function getPortfolioHistory(userId: string) {
+    const currentUsdToCop = await getCurrentUsdToCopRate();
 
     // Obtener historial diario de valor total ajustado a COP
     // Asumimos que 'transactions' tiene snapshots diarios en 'new_value'
@@ -38,8 +44,7 @@ export async function getPortfolioHistory(userId: string) {
 }
 
 export async function getAssetAllocation(userId: string) {
-    const rateRows = await sql`SELECT usd_to_cop FROM exchange_rates ORDER BY date DESC LIMIT 1;`;
-    const currentUsdToCop = Number(rateRows[0]?.usd_to_cop ?? 0);
+    const currentUsdToCop = await getCurrentUsdToCopRate();
 
     const distRows = await sql`
     SELECT a.currency, 

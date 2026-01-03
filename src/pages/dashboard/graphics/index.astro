@@ -3,7 +3,7 @@ import Layout from "@layouts/default.astro";
 import { sql, asRows } from "@lib/db";
 import FinanceChart from "@components/FinanceChart.astro";
 
-const {userId, name, userRole} = Astro.locals;
+const {userId} = Astro.locals;
 if (!userId) return Astro.redirect("/auth/login?returnTo=/dashboard/charts");
 
 // 1. Configuración y Datos Base

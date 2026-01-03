@@ -30,6 +30,20 @@ const envSchema = z.object({
 export type Env = z.infer<typeof envSchema>;
 
 /**
+ * Lista de claves de variables de entorno para evitar redundancia
+ */
+const ENV_KEYS = ['DATABASE_URL', 'SMTP_HOST', 'SMTP_PORT', 'SMTP_USER', 'SMTP_PASS', 'CURRENCY_API_KEY', 'CRON_SECRET', 'ROLE_ADMIN'] as const;
+
+/**
+ * Obtiene todas las variables de entorno desde import.meta.env
+ */
+function getRawEnvVars(): Record<string, any> {
+    return Object.fromEntries(
+        ENV_KEYS.map(key => [key, import.meta.env[key as keyof ImportMetaEnv]])
+    );
+}
+
+/**
  * Variables de entorno validadas
  * Se validan al importar este módulo
  */
@@ -46,16 +60,7 @@ export function validateEnv(): Env {
 
     try {
         // Validar usando Zod
-        validatedEnv = envSchema.parse({
-            DATABASE_URL: import.meta.env.DATABASE_URL,
-            SMTP_HOST: import.meta.env.SMTP_HOST,
-            SMTP_PORT: import.meta.env.SMTP_PORT,
-            SMTP_USER: import.meta.env.SMTP_USER,
-            SMTP_PASS: import.meta.env.SMTP_PASS,
-            CURRENCY_API_KEY: import.meta.env.CURRENCY_API_KEY,
-            CRON_SECRET: import.meta.env.CRON_SECRET,
-            ROLE_ADMIN: import.meta.env.ROLE_ADMIN,
-        });
+        validatedEnv = envSchema.parse(getRawEnvVars());
         return validatedEnv;
     } catch (error) {
         if (error instanceof z.ZodError) {
@@ -101,16 +106,7 @@ export function checkEnvSetup(): {
     missing: string[];
     invalid: string[];
 } {
-    const result = envSchema.safeParse({
-        DATABASE_URL: import.meta.env.DATABASE_URL,
-        SMTP_HOST: import.meta.env.SMTP_HOST,
-        SMTP_PORT: import.meta.env.SMTP_PORT,
-        SMTP_USER: import.meta.env.SMTP_USER,
-        SMTP_PASS: import.meta.env.SMTP_PASS,
-        CURRENCY_API_KEY: import.meta.env.CURRENCY_API_KEY,
-        CRON_SECRET: import.meta.env.CRON_SECRET,
-        ROLE_ADMIN: import.meta.env.ROLE_ADMIN,
-    });
+    const result = envSchema.safeParse(getRawEnvVars());
 
     if (result.success) {
         return { isValid: true, missing: [], invalid: [] };

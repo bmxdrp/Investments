@@ -4,7 +4,7 @@ import Default from "@layouts/default.astro";
 import { setRLSUser, sql } from "@lib/db";
 import CsrfField from "@components/CsrfField.astro";
 
-const {userId, name, userRole} = Astro.locals;
+const {userId} = Astro.locals;
 if (!userId) {
   return Astro.redirect("/auth/login?returnTo=/dashboard/performance");
 }
